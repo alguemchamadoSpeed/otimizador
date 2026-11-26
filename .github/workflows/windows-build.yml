@@ -1,0 +1,28 @@
+name: Windows build
+
+on:
+  push:
+    branches: [ main, feature/** ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build Release x64
+        run: msbuild Otimizador.sln /m /t:Build /p:Configuration=Release /p:Platform=x64 /v:minimal
+
+      - name: Upload executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: Otimizador-Windows-x64
+          path: bin/x64/Release/Otimizador.exe
+          if-no-files-found: error

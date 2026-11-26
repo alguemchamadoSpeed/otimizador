@@ -293,7 +293,7 @@ void Paint(HWND hwnd) {
     Fill(dc, client, Bg);
 
     DrawSidebar(dc);
-    const int contentWidth = std::max(450, client.right - SidebarWidth - 42);
+    const int contentWidth = std::max(450, static_cast<int>(client.right) - SidebarWidth - 42);
 
     switch (g_page) {
     case Page::Home: DrawHome(dc, contentWidth); break;

@@ -1,6 +1,7 @@
 #include "Cleanup.hpp"
 #include <Windows.h>
 #include <ShlObj.h>
+#include <Shellapi.h>
 #include <Shlwapi.h>
 #include <filesystem>
 #include <string>

@@ -5,472 +5,419 @@
 #include "../core/Debloat.hpp"
 
 #include <Windows.h>
-#include <windowsx.h>
-#include <Shellapi.h>
 #include <ShlObj.h>
-#include <algorithm>
-#include <string>
-#include <vector>
+#include <Shellapi.h>
+#include <WebView2.h>
+#include <wrl.h>
+#include <atomic>
+#include <filesystem>
+#include <functional>
+#include <memory>
+#include <new>
 #include <sstream>
+#include <string>
+#include <thread>
+#include <vector>
 
 #pragma comment(lib, "Shell32.lib")
-#pragma comment(lib, "Gdi32.lib")
-#pragma comment(lib, "User32.lib")
+#pragma comment(lib, "Ole32.lib")
 
 namespace ui {
 namespace {
-enum class Page { Home, Cleaner, Debloat, Apps, Tools };
+using Microsoft::WRL::Callback;
+using Microsoft::WRL::ComPtr;
 
-constexpr int SidebarWidth = 218;
-constexpr COLORREF Bg = RGB(12, 16, 24);
-constexpr COLORREF SidebarBg = RGB(15, 21, 31);
-constexpr COLORREF Panel = RGB(21, 29, 42);
-constexpr COLORREF PanelHover = RGB(27, 38, 54);
-constexpr COLORREF Border = RGB(39, 50, 68);
-constexpr COLORREF Text = RGB(238, 242, 249);
-constexpr COLORREF Muted = RGB(148, 161, 181);
-constexpr COLORREF Accent = RGB(104, 137, 255);
-constexpr COLORREF AccentDark = RGB(39, 57, 104);
-constexpr COLORREF Green = RGB(77, 196, 145);
-constexpr COLORREF Orange = RGB(240, 174, 91);
+constexpr wchar_t WindowClassName[] = L"OtimizadorWebViewWindow";
+constexpr UINT WM_APP_WEB_MESSAGE = WM_APP + 11;
 
 HWND g_window = nullptr;
-Page g_page = Page::Home;
-core::SystemSnapshot g_system;
-std::uint64_t g_tempBytes = 0;
-bool g_debloatSelected[8]{};
-std::wstring g_status = L"Pronto. Escolha uma seção para começar.";
-HFONT g_font = nullptr;
-HFONT g_fontMedium = nullptr;
-HFONT g_fontSmall = nullptr;
-HFONT g_fontTitle = nullptr;
+ComPtr<ICoreWebView2Environment> g_environment;
+ComPtr<ICoreWebView2Controller> g_controller;
+ComPtr<ICoreWebView2> g_webView;
+std::atomic_bool g_actionBusy{ false };
 
-std::wstring FormatBytes(std::uint64_t bytes) {
-    const wchar_t* units[] = { L"B", L"KB", L"MB", L"GB", L"TB" };
-    double value = static_cast<double>(bytes);
-    int unit = 0;
-    while (value >= 1024.0 && unit < 4) { value /= 1024.0; ++unit; }
-    wchar_t buffer[80]{};
-    swprintf_s(buffer, L"%.1f %s", value, units[unit]);
-    return buffer;
+struct PostedMessage {
+    std::wstring json;
+    bool releaseBusy = false;
+};
+
+struct ActionOutcome {
+    bool success = false;
+    std::wstring message;
+    bool hasTempBytes = false;
+    std::uint64_t tempBytes = 0;
+};
+
+std::wstring JsonEscape(const std::wstring& value) {
+    std::wostringstream out;
+    for (const wchar_t ch : value) {
+        switch (ch) {
+        case L'"': out << L"\\\""; break;
+        case L'\\': out << L"\\\\"; break;
+        case L'\b': out << L"\\b"; break;
+        case L'\f': out << L"\\f"; break;
+        case L'\n': out << L"\\n"; break;
+        case L'\r': out << L"\\r"; break;
+        case L'\t': out << L"\\t"; break;
+        default:
+            if (ch < 0x20) {
+                constexpr wchar_t hex[] = L"0123456789abcdef";
+                out << L"\\u00" << hex[(ch >> 4) & 0xF] << hex[ch & 0xF];
+            } else {
+                out << ch;
+            }
+        }
+    }
+    return out.str();
 }
 
-void Fill(HDC dc, const RECT& rect, COLORREF color) {
-    HBRUSH brush = CreateSolidBrush(color);
-    FillRect(dc, &rect, brush);
-    DeleteObject(brush);
+void PostJson(const std::wstring& json) {
+    if (g_webView)
+        g_webView->PostWebMessageAsJson(json.c_str());
 }
 
-void RoundPanel(HDC dc, int x, int y, int width, int height,
-                COLORREF color = Panel, COLORREF outline = Border) {
-    RECT r{ x, y, x + width, y + height };
-    HBRUSH brush = CreateSolidBrush(color);
-    HPEN pen = CreatePen(PS_SOLID, 1, outline);
-    HGDIOBJ oldBrush = SelectObject(dc, brush);
-    HGDIOBJ oldPen = SelectObject(dc, pen);
-    RoundRect(dc, r.left, r.top, r.right, r.bottom, 12, 12);
-    SelectObject(dc, oldBrush);
-    SelectObject(dc, oldPen);
-    DeleteObject(brush);
-    DeleteObject(pen);
+std::wstring SnapshotJson() {
+    const auto info = core::GetSystemSnapshot();
+    std::wostringstream json;
+    json << L"{\"type\":\"snapshot\""
+         << L",\"windowsName\":\"" << JsonEscape(info.windowsName) << L"\""
+         << L",\"windowsVersion\":\"" << JsonEscape(info.windowsVersion) << L"\""
+         << L",\"build\":" << info.build
+         << L",\"processor\":\"" << JsonEscape(info.processor) << L"\""
+         << L",\"memoryTotal\":" << info.memoryTotalBytes
+         << L",\"memoryAvailable\":" << info.memoryAvailableBytes
+         << L",\"diskFree\":" << info.diskFreeBytes
+         << L",\"diskTotal\":" << info.diskTotalBytes
+         << L"}";
+    return json.str();
 }
 
-void TextAt(HDC dc, const std::wstring& text, int x, int y, int width,
-            COLORREF color = Text, HFONT font = nullptr, UINT flags = DT_LEFT | DT_SINGLELINE | DT_VCENTER) {
-    RECT r{ x, y, x + width, y + 50 };
-    SetBkMode(dc, TRANSPARENT);
-    SetTextColor(dc, color);
-    HGDIOBJ old = nullptr;
-    if (font) old = SelectObject(dc, font);
-    DrawTextW(dc, text.c_str(), -1, &r, flags);
-    if (old) SelectObject(dc, old);
-}
-
-void WrappedText(HDC dc, const std::wstring& text, int x, int y, int width, int height,
-                 COLORREF color = Muted, HFONT font = nullptr) {
-    RECT r{ x, y, x + width, y + height };
-    SetBkMode(dc, TRANSPARENT);
-    SetTextColor(dc, color);
-    HGDIOBJ old = nullptr;
-    if (font) old = SelectObject(dc, font);
-    DrawTextW(dc, text.c_str(), -1, &r, DT_LEFT | DT_TOP | DT_WORDBREAK | DT_END_ELLIPSIS);
-    if (old) SelectObject(dc, old);
-}
-
-void Button(HDC dc, int x, int y, int width, int height, const std::wstring& label,
-            bool primary = false, bool disabled = false) {
-    const COLORREF background = disabled ? RGB(47, 54, 66) : (primary ? Accent : PanelHover);
-    const COLORREF outline = primary ? Accent : Border;
-    RoundPanel(dc, x, y, width, height, background, outline);
-    TextAt(dc, label, x + 8, y + 1, width - 16,
-           disabled ? Muted : Text, g_fontMedium, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
-}
-
-void Header(HDC dc, const std::wstring& title, const std::wstring& subtitle) {
-    TextAt(dc, title, 250, 28, 720, Text, g_fontTitle);
-    TextAt(dc, subtitle, 251, 72, 740, Muted, g_fontSmall);
-}
-
-void SidebarButton(HDC dc, int y, const wchar_t* label, Page page) {
-    const bool active = g_page == page;
-    if (active) RoundPanel(dc, 14, y, 190, 42, AccentDark, AccentDark);
-    TextAt(dc, label, 30, y, 165, active ? Text : Muted, g_fontMedium);
-}
-
-void RefreshSystem() {
-    g_system = core::GetSystemSnapshot();
-}
-
-void OpenUrl(const wchar_t* url) {
-    ShellExecuteW(nullptr, L"open", url, nullptr, nullptr, SW_SHOWNORMAL);
-}
-
-void DrawSidebar(HDC dc) {
-    RECT r{ 0, 0, SidebarWidth, 4000 };
-    Fill(dc, r, SidebarBg);
-    RoundPanel(dc, 18, 24, 42, 42, Accent, Accent);
-    TextAt(dc, L"O", 18, 24, 42, RGB(255, 255, 255), g_fontTitle, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
-    TextAt(dc, L"OTIMIZADOR", 70, 23, 130, Text, g_fontMedium);
-    TextAt(dc, L"WINDOWS 10 / 11", 70, 47, 130, Muted, g_fontSmall);
-    TextAt(dc, L"MENU PRINCIPAL", 25, 100, 170, Muted, g_fontSmall);
-    SidebarButton(dc, 128, L"Visão geral", Page::Home);
-    SidebarButton(dc, 176, L"Limpeza", Page::Cleaner);
-    SidebarButton(dc, 224, L"Debloat seletivo", Page::Debloat);
-    SidebarButton(dc, 272, L"Instalar aplicativos", Page::Apps);
-    SidebarButton(dc, 320, L"Ferramentas", Page::Tools);
-
-    RECT line{ 22, 385, 195, 386 };
-    Fill(dc, line, Border);
-    TextAt(dc, L"SEGURO POR PADRÃO", 25, 405, 170, Green, g_fontSmall);
-    WrappedText(dc, L"Sem desativar Defender, firewall, Windows Update ou serviços essenciais.", 25, 433, 166, 68, Muted, g_fontSmall);
-    TextAt(dc, L"v1.0.0  •  C++17", 25, 520, 170, Muted, g_fontSmall);
-}
-
-void DrawHome(HDC dc, int contentWidth) {
-    Header(dc, L"Seu Windows, sob controle.", L"Ferramentas práticas para preparar o PC depois de uma formatação.");
-    const int gap = 14;
-    const int cardWidth = (contentWidth - gap * 2) / 3;
-    const int y = 126;
-    RoundPanel(dc, 250, y, cardWidth, 142);
-    RoundPanel(dc, 250 + cardWidth + gap, y, cardWidth, 142);
-    RoundPanel(dc, 250 + (cardWidth + gap) * 2, y, cardWidth, 142);
-
-    TextAt(dc, L"SISTEMA", 270, y + 18, cardWidth - 35, Muted, g_fontSmall);
-    TextAt(dc, g_system.windowsName, 270, y + 48, cardWidth - 35, Text, g_fontTitle);
-    TextAt(dc, g_system.windowsVersion, 270, y + 91, cardWidth - 35, Muted, g_fontSmall);
-
-    TextAt(dc, L"MEMÓRIA RAM", 290 + cardWidth, y + 18, cardWidth - 35, Muted, g_fontSmall);
-    TextAt(dc, g_system.memory, 290 + cardWidth, y + 48, cardWidth - 35, Text, g_fontTitle);
-    TextAt(dc, g_system.memoryDetail, 290 + cardWidth, y + 91, cardWidth - 35, Muted, g_fontSmall);
-
-    TextAt(dc, L"ESPAÇO LIVRE", 290 + (cardWidth + gap) * 2, y + 18, cardWidth - 35, Muted, g_fontSmall);
-    TextAt(dc, g_system.diskFree, 290 + (cardWidth + gap) * 2, y + 48, cardWidth - 35, Text, g_fontTitle);
-    TextAt(dc, g_system.diskDetail, 290 + (cardWidth + gap) * 2, y + 91, cardWidth - 35, Muted, g_fontSmall);
-
-    RoundPanel(dc, 250, 286, contentWidth, 114);
-    TextAt(dc, L"PROCESSADOR", 272, 302, contentWidth - 40, Muted, g_fontSmall);
-    TextAt(dc, g_system.processor, 272, 331, contentWidth - 45, Text, g_fontMedium, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
-
-    TextAt(dc, L"PRIMEIROS PASSOS", 250, 432, contentWidth, Muted, g_fontSmall);
-    const int half = (contentWidth - 14) / 2;
-    RoundPanel(dc, 250, 461, half, 142);
-    RoundPanel(dc, 264 + half, 461, half, 142);
-    TextAt(dc, L"1. Limpe arquivos temporários", 270, 479, half - 35, Text, g_fontMedium);
-    WrappedText(dc, L"Remova arquivos temporários do seu perfil para recuperar espaço em disco.", 270, 510, half - 38, 42);
-    Button(dc, 270, 556, 170, 34, L"Abrir limpeza", true);
-
-    TextAt(dc, L"2. Revise aplicativos opcionais", 284 + half, 479, half - 35, Text, g_fontMedium);
-    WrappedText(dc, L"Escolha individualmente quais aplicativos pré-instalados você realmente não usa.", 284 + half, 510, half - 38, 42);
-    Button(dc, 284 + half, 556, 170, 34, L"Abrir debloat", false);
-}
-
-void DrawCleaner(HDC dc, int contentWidth) {
-    Header(dc, L"Limpeza inteligente", L"Arquivos temporários do seu perfil. Arquivos em uso ou protegidos serão ignorados.");
-    RoundPanel(dc, 250, 132, contentWidth, 205);
-    TextAt(dc, L"ARQUIVOS TEMPORÁRIOS DO USUÁRIO", 274, 153, contentWidth - 45, Muted, g_fontSmall);
-    TextAt(dc, FormatBytes(g_tempBytes), 274, 184, 400, Text, g_fontTitle);
-    TextAt(dc, L"Local: %LOCALAPPDATA%\\Temp", 274, 230, contentWidth - 50, Muted, g_fontSmall);
-    TextAt(dc, L"A limpeza não percorre atalhos, junctions ou links simbólicos.", 274, 253, contentWidth - 50, Muted, g_fontSmall);
-    Button(dc, 274, 287, 220, 36, L"Limpar temporários", true);
-
-    RoundPanel(dc, 250, 363, contentWidth, 154);
-    TextAt(dc, L"LIXEIRA DO WINDOWS", 274, 383, contentWidth - 45, Muted, g_fontSmall);
-    TextAt(dc, L"Remova os itens da Lixeira para liberar espaço.", 274, 414, contentWidth - 45, Text, g_fontMedium);
-    WrappedText(dc, L"A ação é permanente. Confira a Lixeira antes de continuar.", 274, 445, contentWidth - 50, 35);
-    Button(dc, 274, 468, 180, 36, L"Esvaziar Lixeira", false);
-
-    TextAt(dc, g_status, 250, 550, contentWidth, Green, g_fontSmall);
-}
-
-void DrawDebloat(HDC dc, int contentWidth) {
-    Header(dc, L"Debloat seletivo", L"Marque somente os apps opcionais que não usa. A remoção afeta apenas seu usuário.");
-    TextAt(dc, L"APLICATIVOS OPCIONAIS", 250, 116, contentWidth, Muted, g_fontSmall);
-
+std::wstring AppsJson() {
+    std::wostringstream json;
+    json << L"{\"type\":\"apps\",\"items\":[";
     const auto& apps = core::GetOptionalApps();
     for (std::size_t i = 0; i < apps.size(); ++i) {
-        const int y = 143 + static_cast<int>(i) * 49;
-        RoundPanel(dc, 250, y, contentWidth, 43, Panel, Border);
-        RECT check{ 266, y + 12, 283, y + 29 };
-        Fill(dc, check, g_debloatSelected[i] ? Accent : RGB(31, 41, 56));
-        if (g_debloatSelected[i]) {
-            HPEN pen = CreatePen(PS_SOLID, 2, RGB(255, 255, 255));
-            HGDIOBJ old = SelectObject(dc, pen);
-            MoveToEx(dc, 270, y + 20, nullptr);
-            LineTo(dc, 275, y + 25);
-            LineTo(dc, 281, y + 15);
-            SelectObject(dc, old);
-            DeleteObject(pen);
-        }
-        TextAt(dc, apps[i].name, 298, y + 3, contentWidth - 325, Text, g_fontMedium);
-        TextAt(dc, apps[i].description, 298, y + 22, contentWidth - 325, Muted, g_fontSmall);
+        if (i) json << L",";
+        json << L"{\"id\":\"" << JsonEscape(apps[i].id)
+             << L"\",\"name\":\"" << JsonEscape(apps[i].name)
+             << L"\",\"description\":\"" << JsonEscape(apps[i].description) << L"\"}";
     }
-    Button(dc, 250, 552, 226, 38, L"Remover selecionados", true);
-    TextAt(dc, g_status, 490, 552, contentWidth - 245, Muted, g_fontSmall);
+    json << L"]}";
+    return json.str();
 }
 
-void DrawApps(HDC dc, int contentWidth) {
-    Header(dc, L"Instalar aplicativos", L"Instalações via Windows Package Manager (winget), com IDs exatos.");
-    const bool winget = core::IsWingetAvailable();
-    RoundPanel(dc, 250, 112, contentWidth, 48);
-    TextAt(dc, winget ? L"winget detectado — pronto para instalar." : L"winget não encontrado. Atualize o App Installer pela Microsoft Store.",
-        270, 112, contentWidth - 40, winget ? Green : Orange, g_fontSmall);
-
+std::wstring PackagesJson() {
+    std::wostringstream json;
+    json << L"{\"type\":\"packages\",\"items\":[";
     const auto& packages = core::GetPackages();
-    const int gap = 14;
-    const int cardWidth = (contentWidth - gap) / 2;
     for (std::size_t i = 0; i < packages.size(); ++i) {
-        const int col = static_cast<int>(i % 2);
-        const int row = static_cast<int>(i / 2);
-        const int x = 250 + col * (cardWidth + gap);
-        const int y = 176 + row * 78;
-        RoundPanel(dc, x, y, cardWidth, 68);
-        TextAt(dc, packages[i].name, x + 15, y + 9, cardWidth - 125, Text, g_fontMedium);
-        TextAt(dc, packages[i].description, x + 15, y + 34, cardWidth - 125, Muted, g_fontSmall);
-        Button(dc, x + cardWidth - 102, y + 17, 88, 34, L"Instalar", true);
+        if (i) json << L",";
+        json << L"{\"id\":\"" << JsonEscape(packages[i].id)
+             << L"\",\"name\":\"" << JsonEscape(packages[i].name)
+             << L"\",\"description\":\"" << JsonEscape(packages[i].description) << L"\"}";
     }
-    TextAt(dc, g_status, 250, 585, contentWidth, Muted, g_fontSmall);
+    json << L"]}";
+    return json.str();
 }
 
-void DrawTools(HDC dc, int contentWidth) {
-    Header(dc, L"Ferramentas extras", L"Atalhos úteis e ferramentas opcionais da comunidade.");
-    const int half = (contentWidth - 14) / 2;
-
-    RoundPanel(dc, 250, 130, half, 145);
-    TextAt(dc, L"INICIALIZAÇÃO DO WINDOWS", 272, 151, half - 40, Muted, g_fontSmall);
-    TextAt(dc, L"Revise o que inicia com o PC", 272, 181, half - 40, Text, g_fontMedium);
-    WrappedText(dc, L"Abre as configurações oficiais de aplicativos de inicialização.", 272, 210, half - 42, 38);
-    Button(dc, 272, 237, 174, 32, L"Abrir configurações", true);
-
-    RoundPanel(dc, 264 + half, 130, half, 145);
-    TextAt(dc, L"APLICATIVOS INSTALADOS", 286 + half, 151, half - 40, Muted, g_fontSmall);
-    TextAt(dc, L"Gerencie programas do PC", 286 + half, 181, half - 40, Text, g_fontMedium);
-    WrappedText(dc, L"Use a página oficial do Windows para alterar ou desinstalar programas.", 286 + half, 210, half - 42, 38);
-    Button(dc, 286 + half, 237, 174, 32, L"Abrir aplicativos", false);
-
-    TextAt(dc, L"FERRAMENTAS DA COMUNIDADE", 250, 316, contentWidth, Muted, g_fontSmall);
-
-    RoundPanel(dc, 250, 344, half, 132);
-    TextAt(dc, L"SpotifyLite", 272, 362, half - 40, Text, g_fontMedium);
-    WrappedText(dc, L"Projeto de terceiros da TeamAntiLag. Confira a página do release e valide o arquivo antes de executar.", 272, 390, half - 42, 48);
-    Button(dc, 272, 441, 174, 30, L"Ver release", true);
-
-    RoundPanel(dc, 264 + half, 344, half, 132);
-    TextAt(dc, L"DiscordDebloat v2.1", 286 + half, 362, half - 40, Text, g_fontMedium);
-    WrappedText(dc, L"Ferramenta de terceiros para personalizar o Discord. Leia as notas e confirme a compatibilidade.", 286 + half, 390, half - 42, 48);
-    Button(dc, 286 + half, 441, 174, 30, L"Ver release", false);
-
-    RoundPanel(dc, 250, 496, contentWidth, 88);
-    TextAt(dc, L"SEGURANÇA E MANUTENÇÃO", 272, 512, contentWidth - 40, Muted, g_fontSmall);
-    TextAt(dc, L"Abra o Windows Update ou a Segurança do Windows para revisar atualizações e proteção.", 272, 541, contentWidth - 45, Text, g_fontSmall);
-    Button(dc, 250 + contentWidth - 190, 520, 168, 38, L"Segurança do Windows", false);
+std::wstring ActionResultJson(const ActionOutcome& outcome) {
+    std::wostringstream json;
+    json << L"{\"type\":\"actionResult\",\"success\":"
+         << (outcome.success ? L"true" : L"false")
+         << L",\"message\":\"" << JsonEscape(outcome.message) << L"\""
+         << L",\"refreshSnapshot\":true";
+    if (outcome.hasTempBytes)
+        json << L",\"tempBytes\":" << outcome.tempBytes;
+    json << L"}";
+    return json.str();
 }
 
-void Paint(HWND hwnd) {
-    PAINTSTRUCT ps{};
-    HDC dc = BeginPaint(hwnd, &ps);
-    RECT client{};
-    GetClientRect(hwnd, &client);
-    Fill(dc, client, Bg);
-
-    DrawSidebar(dc);
-    const int contentWidth = std::max(450, static_cast<int>(client.right) - SidebarWidth - 42);
-
-    switch (g_page) {
-    case Page::Home: DrawHome(dc, contentWidth); break;
-    case Page::Cleaner: DrawCleaner(dc, contentWidth); break;
-    case Page::Debloat: DrawDebloat(dc, contentWidth); break;
-    case Page::Apps: DrawApps(dc, contentWidth); break;
-    case Page::Tools: DrawTools(dc, contentWidth); break;
-    }
-    EndPaint(hwnd, &ps);
-}
-
-void ShowMessage(const std::wstring& message, UINT icon = MB_ICONINFORMATION) {
-    MessageBoxW(g_window, message.c_str(), L"Otimizador", MB_OK | icon);
-}
-
-void RunCleanup() {
-    const auto answer = MessageBoxW(g_window,
-        L"Isso removerá arquivos encontrados em %LOCALAPPDATA%\\Temp. "
-        L"Arquivos em uso serão ignorados. Deseja continuar?",
-        L"Confirmar limpeza", MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2);
-    if (answer != IDYES) return;
-
-    const auto result = core::CleanTemporaryFiles();
-    g_tempBytes = core::GetTemporaryFilesSize();
-    std::wostringstream report;
-    report << L"Limpeza concluída.\n\nEspaço liberado: " << FormatBytes(result.bytesFreed)
-           << L"\nArquivos removidos: " << result.filesRemoved
-           << L"\nPastas removidas: " << result.directoriesRemoved
-           << L"\nItens ignorados: " << result.skipped;
-    g_status = L"Limpeza concluída. Espaço liberado: " + FormatBytes(result.bytesFreed);
-    ShowMessage(report.str());
-    InvalidateRect(g_window, nullptr, TRUE);
-}
-
-void RunRecycleBin() {
-    const auto answer = MessageBoxW(g_window,
-        L"Esvaziar a Lixeira é permanente. Confira se não há arquivos que deseja recuperar.\n\nDeseja continuar?",
-        L"Confirmar ação permanente", MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2);
-    if (answer != IDYES) return;
-
-    if (core::EmptyRecycleBin()) {
-        g_status = L"Lixeira esvaziada.";
-        ShowMessage(L"A Lixeira foi esvaziada.");
-    } else {
-        g_status = L"Não foi possível esvaziar a Lixeira.";
-        ShowMessage(g_status, MB_ICONWARNING);
-    }
-    InvalidateRect(g_window, nullptr, TRUE);
-}
-
-void RunDebloat() {
-    std::vector<std::size_t> selected;
-    const auto& apps = core::GetOptionalApps();
-    for (std::size_t i = 0; i < apps.size(); ++i)
-        if (g_debloatSelected[i]) selected.push_back(i);
-
-    if (selected.empty()) {
-        ShowMessage(L"Marque pelo menos um aplicativo opcional.");
+void PostToWindow(HWND hwnd, std::wstring json, bool releaseBusy) {
+    auto* message = new (std::nothrow) PostedMessage{ std::move(json), releaseBusy };
+    if (!message) {
+        if (releaseBusy) g_actionBusy.store(false);
         return;
     }
-
-    std::wostringstream prompt;
-    prompt << L"Remover " << selected.size() << L" aplicativo(s) do usuário atual?\n\n";
-    for (const auto index : selected)
-        prompt << L"• " << apps[index].name << L"\n";
-    prompt << L"\nA ação pode exigir reinstalação pela Microsoft Store.";
-    if (MessageBoxW(g_window, prompt.str().c_str(), L"Confirmar debloat",
-        MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2) != IDYES) return;
-
-    unsigned int succeeded = 0;
-    std::wostringstream report;
-    for (const auto index : selected) {
-        std::wstring message;
-        if (core::RemoveCurrentUserApp(apps[index].id, message)) ++succeeded;
-        report << apps[index].name << L": " << message << L"\n\n";
-        g_debloatSelected[index] = false;
+    if (!PostMessageW(hwnd, WM_APP_WEB_MESSAGE, 0, reinterpret_cast<LPARAM>(message))) {
+        delete message;
+        if (releaseBusy) g_actionBusy.store(false);
     }
-    g_status = L"Debloat finalizado: " + std::to_wstring(succeeded) +
-        L" de " + std::to_wstring(selected.size()) + L" removido(s).";
-    report << L"Resultado: " << succeeded << L" de " << selected.size() << L" removido(s).";
-    ShowMessage(report.str(), succeeded == selected.size() ? MB_ICONINFORMATION : MB_ICONWARNING);
-    InvalidateRect(g_window, nullptr, TRUE);
 }
 
-void Click(int x, int y, int clientWidth) {
-    if (x < SidebarWidth) {
-        if (y >= 128 && y < 170) g_page = Page::Home;
-        else if (y >= 176 && y < 218) g_page = Page::Cleaner;
-        else if (y >= 224 && y < 266) g_page = Page::Debloat;
-        else if (y >= 272 && y < 314) g_page = Page::Apps;
-        else if (y >= 320 && y < 362) g_page = Page::Tools;
-        if (g_page == Page::Cleaner) g_tempBytes = core::GetTemporaryFilesSize();
-        if (g_page == Page::Home) RefreshSystem();
-        InvalidateRect(g_window, nullptr, TRUE);
-        return;
+void StartTempScan(HWND hwnd) {
+    std::thread([hwnd]() {
+        const auto bytes = core::GetTemporaryFilesSize();
+        std::wostringstream json;
+        json << L"{\"type\":\"tempInfo\",\"bytes\":" << bytes << L"}";
+        PostToWindow(hwnd, json.str(), false);
+    }).detach();
+}
+
+ActionOutcome RunAction(const std::wstring& command) {
+    ActionOutcome outcome{};
+
+    if (command == L"cleanTemp") {
+        const auto result = core::CleanTemporaryFiles();
+        outcome.success = result.filesRemoved > 0 || result.directoriesRemoved > 0 || result.skipped == 0;
+        std::wostringstream message;
+        message << L"Limpeza finalizada. " << result.filesRemoved << L" arquivo(s) removido(s), "
+                << result.directoriesRemoved << L" pasta(s) e "
+                << result.skipped << L" item(ns) ignorado(s). Espaço liberado: ";
+        const double mb = static_cast<double>(result.bytesFreed) / (1024.0 * 1024.0);
+        message.setf(std::ios::fixed);
+        message.precision(1);
+        message << mb << L" MB.";
+        outcome.message = message.str();
+        outcome.hasTempBytes = true;
+        outcome.tempBytes = core::GetTemporaryFilesSize();
+        return outcome;
     }
 
-    const int contentWidth = std::max(450, clientWidth - SidebarWidth - 42);
-    if (g_page == Page::Home) {
-        const int half = (contentWidth - 14) / 2;
-        if (y >= 556 && y <= 593) {
-            if (x >= 250 && x <= 250 + half) {
-                g_page = Page::Cleaner;
-                g_tempBytes = core::GetTemporaryFilesSize();
-            } else if (x >= 264 + half && x <= 264 + half * 2) {
-                g_page = Page::Debloat;
-            }
-            InvalidateRect(g_window, nullptr, TRUE);
-        }
-    } else if (g_page == Page::Cleaner) {
-        if (x >= 270 && x <= 500 && y >= 287 && y <= 326) RunCleanup();
-        else if (x >= 270 && x <= 465 && y >= 468 && y <= 507) RunRecycleBin();
-    } else if (g_page == Page::Debloat) {
-        const auto& apps = core::GetOptionalApps();
-        for (std::size_t i = 0; i < apps.size(); ++i) {
-            const int rowY = 143 + static_cast<int>(i) * 49;
-            if (x >= 250 && x <= 250 + contentWidth && y >= rowY && y <= rowY + 43) {
-                g_debloatSelected[i] = !g_debloatSelected[i];
-                InvalidateRect(g_window, nullptr, TRUE);
-                return;
-            }
-        }
-        if (x >= 250 && x <= 480 && y >= 552 && y <= 590) RunDebloat();
-    } else if (g_page == Page::Apps) {
+    if (command == L"emptyRecycleBin") {
+        outcome.success = core::EmptyRecycleBin();
+        outcome.message = outcome.success
+            ? L"A Lixeira foi esvaziada."
+            : L"Não foi possível esvaziar a Lixeira.";
+        return outcome;
+    }
+
+    if (command.rfind(L"install:", 0) == 0) {
+        const std::wstring id = command.substr(8);
         const auto& packages = core::GetPackages();
-        const int gap = 14;
-        const int cardWidth = (contentWidth - gap) / 2;
-        for (std::size_t i = 0; i < packages.size(); ++i) {
-            const int col = static_cast<int>(i % 2);
-            const int row = static_cast<int>(i / 2);
-            const int cardX = 250 + col * (cardWidth + gap);
-            const int cardY = 176 + row * 78;
-            if (x >= cardX + cardWidth - 108 && x <= cardX + cardWidth - 8 &&
-                y >= cardY + 10 && y <= cardY + 60) {
+        for (const auto& package : packages) {
+            if (package.id == id) {
                 if (!core::IsWingetAvailable()) {
-                    ShowMessage(L"winget não está disponível.\n\nAbra a Microsoft Store e atualize o App Installer.");
-                } else if (core::LaunchPackageInstall(packages[i])) {
-                    g_status = L"Instalador iniciado em uma janela de terminal: " + packages[i].name;
-                } else {
-                    g_status = L"Não foi possível iniciar o winget.";
+                    outcome.message = L"winget não está disponível. Atualize o App Installer pela Microsoft Store.";
+                    return outcome;
                 }
-                InvalidateRect(g_window, nullptr, TRUE);
-                return;
+                outcome.success = core::LaunchPackageInstall(package);
+                outcome.message = outcome.success
+                    ? L"O instalador de " + package.name + L" foi iniciado em uma janela de terminal."
+                    : L"Não foi possível iniciar o instalador.";
+                return outcome;
             }
         }
-    } else if (g_page == Page::Tools) {
-        const int half = (contentWidth - 14) / 2;
-        if (x >= 270 && x <= 455 && y >= 237 && y <= 270)
-            OpenUrl(L"ms-settings:startupapps");
-        else if (x >= 286 + half && x <= 470 + half && y >= 237 && y <= 270)
-            OpenUrl(L"ms-settings:appsfeatures");
-        else if (x >= 270 && x <= 455 && y >= 441 && y <= 475)
-            OpenUrl(L"https://github.com/TeamAntiLag/SpotifyLite/releases/tag/SpotifyLite");
-        else if (x >= 286 + half && x <= 470 + half && y >= 441 && y <= 475)
-            OpenUrl(L"https://github.com/TeamAntiLag/DiscordDebloat/releases/tag/v2.1");
-        else if (x >= 250 + contentWidth - 195 && x <= 250 + contentWidth && y >= 520 && y <= 558)
-            OpenUrl(L"ms-settings:windowsdefender");
+        outcome.message = L"Aplicativo não encontrado no catálogo permitido.";
+        return outcome;
     }
+
+    if (command.rfind(L"removeApps:", 0) == 0) {
+        const std::wstring ids = command.substr(11);
+        std::wstringstream list(ids);
+        std::wstring id;
+        unsigned int successCount = 0;
+        unsigned int totalCount = 0;
+        std::wostringstream details;
+        while (std::getline(list, id, L'|')) {
+            if (id.empty()) continue;
+            ++totalCount;
+            std::wstring resultMessage;
+            if (core::RemoveCurrentUserApp(id, resultMessage))
+                ++successCount;
+            details << resultMessage << L" ";
+        }
+        outcome.success = totalCount > 0 && successCount == totalCount;
+        std::wostringstream message;
+        message << successCount << L" de " << totalCount
+                << L" aplicativo(s) removido(s). " << details.str();
+        outcome.message = message.str();
+        return outcome;
+    }
+
+    outcome.message = L"Ação não reconhecida.";
+    return outcome;
+}
+
+void StartAction(HWND hwnd, const std::wstring& command) {
+    bool expected = false;
+    if (!g_actionBusy.compare_exchange_strong(expected, true)) {
+        PostJson(L"{\"type\":\"actionResult\",\"success\":false,\"message\":\"Já existe uma ação em andamento.\"}");
+        return;
+    }
+
+    std::thread([hwnd, command]() {
+        const auto outcome = RunAction(command);
+        PostToWindow(hwnd, ActionResultJson(outcome), true);
+    }).detach();
+}
+
+std::wstring GetExecutableDirectory() {
+    wchar_t path[MAX_PATH]{};
+    const DWORD length = GetModuleFileNameW(nullptr, path, MAX_PATH);
+    if (length == 0 || length >= MAX_PATH) return {};
+    std::wstring result(path, length);
+    const auto separator = result.find_last_of(L"\\/");
+    if (separator == std::wstring::npos) return {};
+    result.resize(separator);
+    return result;
+}
+
+std::wstring GetWebViewUserDataFolder() {
+    PWSTR localAppData = nullptr;
+    if (FAILED(SHGetKnownFolderPath(FOLDERID_LocalAppData, KF_FLAG_CREATE, nullptr, &localAppData)))
+        return {};
+    std::wstring path(localAppData);
+    CoTaskMemFree(localAppData);
+    path += L"\\Otimizador\\WebView2";
+    std::error_code error;
+    std::filesystem::create_directories(path, error);
+    return error ? std::wstring{} : path;
+}
+
+void OpenSystemUrl(const std::wstring& target) {
+    const wchar_t* url = nullptr;
+    if (target == L"startup") url = L"ms-settings:startupapps";
+    else if (target == L"apps") url = L"ms-settings:appsfeatures";
+    else if (target == L"security") url = L"windowsdefender:";
+    else if (target == L"update") url = L"ms-settings:windowsupdate";
+    else if (target == L"spotifyLite") url = L"https://github.com/TeamAntiLag/SpotifyLite/releases/tag/SpotifyLite";
+    else if (target == L"discordDebloat") url = L"https://github.com/TeamAntiLag/DiscordDebloat/releases/tag/v2.1";
+    else if (target == L"winget") url = L"https://learn.microsoft.com/windows/package-manager/winget/";
+    if (url) ShellExecuteW(nullptr, L"open", url, nullptr, nullptr, SW_SHOWNORMAL);
+}
+
+void HandleBridgeMessage(HWND hwnd, const std::wstring& message) {
+    if (message == L"getSnapshot" || message == L"refresh") {
+        PostJson(SnapshotJson());
+        return;
+    }
+    if (message == L"getApps") {
+        PostJson(AppsJson());
+        return;
+    }
+    if (message == L"getPackages") {
+        PostJson(PackagesJson());
+        return;
+    }
+    if (message == L"getTempInfo") {
+        StartTempScan(hwnd);
+        return;
+    }
+    if (message.rfind(L"open:", 0) == 0) {
+        OpenSystemUrl(message.substr(5));
+        return;
+    }
+    if (message == L"cleanTemp" || message == L"emptyRecycleBin" ||
+        message.rfind(L"install:", 0) == 0 || message.rfind(L"removeApps:", 0) == 0) {
+        StartAction(hwnd, message);
+        return;
+    }
+    PostJson(L"{\"type\":\"actionResult\",\"success\":false,\"message\":\"Comando desconhecido.\"}");
+}
+
+void ResizeWebView(HWND hwnd) {
+    if (!g_controller) return;
+    RECT bounds{};
+    GetClientRect(hwnd, &bounds);
+    g_controller->put_Bounds(bounds);
+}
+
+void ShowWebViewError(HRESULT result) {
+    wchar_t message[512]{};
+    swprintf_s(message,
+        L"Não foi possível iniciar a interface WebView2.\n\n"
+        L"Código: 0x%08X\n\n"
+        L"Verifique se o Microsoft Edge WebView2 Runtime está instalado. "
+        L"Você pode instalá-lo pelo site oficial da Microsoft.",
+        static_cast<unsigned int>(result));
+    MessageBoxW(g_window, message, L"Otimizador - WebView2", MB_OK | MB_ICONERROR);
+}
+
+void InitializeWebView(HWND hwnd) {
+    const std::wstring userData = GetWebViewUserDataFolder();
+    if (userData.empty()) {
+        ShowWebViewError(E_ACCESSDENIED);
+        return;
+    }
+
+    const HRESULT hr = CreateCoreWebView2EnvironmentWithOptions(
+        nullptr, userData.c_str(), nullptr,
+        Callback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>(
+            [hwnd](HRESULT result, ICoreWebView2Environment* environment) -> HRESULT {
+                if (FAILED(result) || !environment) {
+                    ShowWebViewError(result);
+                    return result;
+                }
+                g_environment = environment;
+                return g_environment->CreateCoreWebView2Controller(
+                    hwnd,
+                    Callback<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler>(
+                        [hwnd](HRESULT controllerResult, ICoreWebView2Controller* controller) -> HRESULT {
+                            if (FAILED(controllerResult) || !controller) {
+                                ShowWebViewError(controllerResult);
+                                return controllerResult;
+                            }
+
+                            g_controller = controller;
+                            HRESULT result = g_controller->get_CoreWebView2(&g_webView);
+                            if (FAILED(result) || !g_webView) {
+                                ShowWebViewError(result);
+                                return result;
+                            }
+
+                            ComPtr<ICoreWebView2Settings> settings;
+                            if (SUCCEEDED(g_webView->get_Settings(&settings)) && settings) {
+#ifdef _DEBUG
+                                settings->put_AreDevToolsEnabled(TRUE);
+#else
+                                settings->put_AreDevToolsEnabled(FALSE);
+#endif
+                                settings->put_IsStatusBarEnabled(FALSE);
+                            }
+
+                            const std::wstring webFolder = GetExecutableDirectory() + L"\\web";
+                            const DWORD attrs = GetFileAttributesW(webFolder.c_str());
+                            if (attrs == INVALID_FILE_ATTRIBUTES || !(attrs & FILE_ATTRIBUTE_DIRECTORY)) {
+                                MessageBoxW(hwnd,
+                                    L"Os arquivos da interface não foram encontrados.\n\n"
+                                    L"Compile o projeto novamente para gerar a pasta web ao lado do executável.",
+                                    L"Otimizador", MB_OK | MB_ICONERROR);
+                                return E_FAIL;
+                            }
+
+                            ComPtr<ICoreWebView2_3> webView3;
+                            result = g_webView.As(&webView3);
+                            if (FAILED(result) || !webView3) {
+                                ShowWebViewError(result);
+                                return result;
+                            }
+
+                            result = webView3->SetVirtualHostNameToFolderMapping(
+                                L"app.local", webFolder.c_str(),
+                                COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW);
+                            if (FAILED(result)) {
+                                ShowWebViewError(result);
+                                return result;
+                            }
+
+                            EventRegistrationToken token{};
+                            result = g_webView->add_WebMessageReceived(
+                                Callback<ICoreWebView2WebMessageReceivedEventHandler>(
+                                    [hwnd](ICoreWebView2*, ICoreWebView2WebMessageReceivedEventArgs* args) -> HRESULT {
+                                        LPWSTR rawMessage = nullptr;
+                                        const HRESULT readResult = args->TryGetWebMessageAsString(&rawMessage);
+                                        if (SUCCEEDED(readResult) && rawMessage) {
+                                            HandleBridgeMessage(hwnd, rawMessage);
+                                            CoTaskMemFree(rawMessage);
+                                        }
+                                        return S_OK;
+                                    }).Get(), &token);
+                            if (FAILED(result)) return result;
+
+                            ResizeWebView(hwnd);
+                            return g_webView->Navigate(L"https://app.local/index.html");
+                        }).Get());
+            }).Get());
+
+    if (FAILED(hr))
+        ShowWebViewError(hr);
 }
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
     case WM_CREATE:
         g_window = hwnd;
-        g_font = CreateFontW(-16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
-            DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
-        g_fontMedium = CreateFontW(-16, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE,
-            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
-            DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
-        g_fontSmall = CreateFontW(-12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
-            DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
-        g_fontTitle = CreateFontW(-25, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE,
-            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
-            DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
-        RefreshSystem();
+        InitializeWebView(hwnd);
         return 0;
     case WM_GETMINMAXINFO: {
         auto* info = reinterpret_cast<MINMAXINFO*>(lParam);
@@ -478,22 +425,24 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         info->ptMinTrackSize.y = 680;
         return 0;
     }
-    case WM_ERASEBKGND:
-        return 1;
-    case WM_PAINT:
-        Paint(hwnd);
+    case WM_SIZE:
+        ResizeWebView(hwnd);
         return 0;
-    case WM_LBUTTONUP: {
-        RECT rect{};
-        GetClientRect(hwnd, &rect);
-        Click(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam), rect.right);
+    case WM_APP_WEB_MESSAGE: {
+        std::unique_ptr<PostedMessage> payload(reinterpret_cast<PostedMessage*>(lParam));
+        if (payload) PostJson(payload->json);
+        if (payload && payload->releaseBusy) g_actionBusy.store(false);
         return 0;
     }
+    case WM_ERASEBKGND:
+        return 1;
     case WM_DESTROY:
-        if (g_font) DeleteObject(g_font);
-        if (g_fontMedium) DeleteObject(g_fontMedium);
-        if (g_fontSmall) DeleteObject(g_fontSmall);
-        if (g_fontTitle) DeleteObject(g_fontTitle);
+        if (g_controller) {
+            g_controller->Close();
+            g_controller.Reset();
+        }
+        g_webView.Reset();
+        g_environment.Reset();
         PostQuitMessage(0);
         return 0;
     default:
@@ -503,22 +452,33 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 }
 
 int RunMainWindow(HINSTANCE instance, int showCommand) {
-    const wchar_t* className = L"OtimizadorMainWindow";
-    WNDCLASSEXW wc{};
-    wc.cbSize = sizeof(wc);
-    wc.lpfnWndProc = WindowProc;
-    wc.hInstance = instance;
-    wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-    wc.hbrBackground = nullptr;
-    wc.lpszClassName = className;
-    wc.style = CS_HREDRAW | CS_VREDRAW;
-    if (!RegisterClassExW(&wc) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS)
+    const HRESULT comResult = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    if (FAILED(comResult) && comResult != RPC_E_CHANGED_MODE)
         return 1;
 
-    HWND hwnd = CreateWindowExW(0, className, L"Otimizador — Windows 10 / 11",
-        WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 1120, 760,
+    WNDCLASSEXW windowClass{};
+    windowClass.cbSize = sizeof(windowClass);
+    windowClass.lpfnWndProc = WindowProc;
+    windowClass.hInstance = instance;
+    windowClass.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    windowClass.hIcon = LoadIconW(nullptr, IDI_APPLICATION);
+    windowClass.hIconSm = windowClass.hIcon;
+    windowClass.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
+    windowClass.lpszClassName = WindowClassName;
+
+    if (!RegisterClassExW(&windowClass) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS) {
+        if (SUCCEEDED(comResult)) CoUninitialize();
+        return 1;
+    }
+
+    HWND hwnd = CreateWindowExW(
+        0, WindowClassName, L"Otimizador — Windows 10 / 11",
+        WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 1320, 860,
         nullptr, nullptr, instance, nullptr);
-    if (!hwnd) return 1;
+    if (!hwnd) {
+        if (SUCCEEDED(comResult)) CoUninitialize();
+        return 1;
+    }
 
     ShowWindow(hwnd, showCommand);
     UpdateWindow(hwnd);
@@ -528,6 +488,8 @@ int RunMainWindow(HINSTANCE instance, int showCommand) {
         TranslateMessage(&message);
         DispatchMessageW(&message);
     }
+
+    if (SUCCEEDED(comResult)) CoUninitialize();
     return static_cast<int>(message.wParam);
 }
 }

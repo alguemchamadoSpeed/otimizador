@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: dark;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  --background:#09090b; --surface:#0c0c0f; --card:#101014;
+  --border:#25252c; --muted:#8b8b98; --text:#f4f4f5;
+}
+* { box-sizing:border-box; }
+html, body, #root { width:100%; min-width:0; height:100%; margin:0; }
+body { background:var(--background); color:var(--text); overflow:hidden; }
+button,input { font:inherit; }
+button:focus-visible,input:focus-visible { outline:2px solid #a1a1aa; outline-offset:2px; }
+::selection { background:#3f3f46; color:white; }
+* { scrollbar-width:thin; scrollbar-color:#3f3f46 transparent; }
+::-webkit-scrollbar { width:8px; height:8px; }
+::-webkit-scrollbar-thumb { background:#3f3f46; border-radius:999px; }
+::-webkit-scrollbar-track { background:transparent; }
+.app-shell { display:grid; grid-template-columns:248px minmax(0,1fr); width:100%; height:100%; background:#09090b; }
+.sidebar { display:flex; flex-direction:column; gap:24px; min-width:0; border-right:1px solid #25252c; background:#0b0b0e; padding:22px 14px 16px; }
+.main-scroll { min-width:0; height:100%; overflow:auto; }
+@media (max-width:940px) {
+  .app-shell { grid-template-columns:72px minmax(0,1fr); }
+  .sidebar { align-items:center; padding-inline:8px; }
+  .sidebar-wordmark,.nav-label,.sidebar-footer,.nav-group-label,.nav-text { display:none!important; }
+  .nav-item { justify-content:center; width:46px!important; padding-inline:0!important; }
+}

@@ -41,7 +41,12 @@
 # Build directories
 [Bb]uild/
 [Bb]uild-*/
-cmake-build-*/
+cmake-build*/
+bin/
+obj/
+packages/
+ui/node_modules/
+ui/dist/
 
 # CMake generated files
 CMakeFiles/
@@ -56,6 +61,8 @@ compile_commands.json
 *.log
 *.bak
 *.swp
+*.user
+*.suo
 
 # vcpkg
 vcpkg_installed/

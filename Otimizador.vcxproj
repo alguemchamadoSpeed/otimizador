@@ -98,5 +98,29 @@
     <ClInclude Include="src\ui\MainWindow.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
-  <ImportGroup Label="ExtensionTargets" />
+  <ItemGroup>
+    <None Include="packages.config" />
+  </ItemGroup>
+  <PropertyGroup>
+    <WebView2LoaderPreference>Static</WebView2LoaderPreference>
+  </PropertyGroup>
+  <ImportGroup Label="ExtensionTargets">
+    <Import Project="packages\Microsoft.Web.WebView2.1.0.4370.26\build\native\Microsoft.Web.WebView2.targets"
+            Condition="Exists('packages\Microsoft.Web.WebView2.1.0.4370.26\build\native\Microsoft.Web.WebView2.targets')" />
+  </ImportGroup>
+  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
+    <Error Condition="!Exists('packages\Microsoft.Web.WebView2.1.0.4370.26\build\native\Microsoft.Web.WebView2.targets')"
+           Text="Microsoft.Web.WebView2 package missing. Run build.bat or restore NuGet packages." />
+  </Target>
+
+  <Target Name="BuildWebUi" BeforeTargets="PrepareForBuild">
+    <Exec WorkingDirectory="$(ProjectDir)ui" Command="npm.cmd install --no-audit --no-fund" />
+    <Exec WorkingDirectory="$(ProjectDir)ui" Command="npm.cmd run build" />
+  </Target>
+  <Target Name="CopyWebUi" AfterTargets="Build">
+    <ItemGroup>
+      <WebUiContent Include="$(ProjectDir)ui\dist\**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(WebUiContent)" DestinationFiles="@(WebUiContent->'$(OutDir)web\%(RecursiveDir)%(Filename)%(Extension)')" />
+  </Target>
 </Project>

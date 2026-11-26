@@ -2,7 +2,6 @@
 #include <Windows.h>
 #include <winternl.h>
 #include <winreg.h>
-#include <shlobj.h>
 #include <sstream>
 #include <iomanip>
 
@@ -60,11 +59,14 @@ SystemSnapshot GetSystemSnapshot() {
         info.windowsName = L"Windows";
         info.windowsVersion = L"Versão não disponível";
     }
+
     info.processor = ReadProcessorName();
 
     MEMORYSTATUSEX memory{};
     memory.dwLength = sizeof(memory);
     if (GlobalMemoryStatusEx(&memory)) {
+        info.memoryTotalBytes = memory.ullTotalPhys;
+        info.memoryAvailableBytes = memory.ullAvailPhys;
         info.memory = FormatBytes(memory.ullTotalPhys);
         info.memoryDetail = FormatBytes(memory.ullAvailPhys) + L" disponíveis";
     } else {
@@ -77,6 +79,8 @@ SystemSnapshot GetSystemSnapshot() {
         root[0] = windowsDir[0];
         ULARGE_INTEGER freeBytes{}, totalBytes{}, totalFree{};
         if (GetDiskFreeSpaceExW(root, &freeBytes, &totalBytes, &totalFree)) {
+            info.diskFreeBytes = freeBytes.QuadPart;
+            info.diskTotalBytes = totalBytes.QuadPart;
             info.diskFree = FormatBytes(freeBytes.QuadPart);
             info.diskDetail = L"livres de " + FormatBytes(totalBytes.QuadPart);
         }

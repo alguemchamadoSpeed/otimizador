@@ -369,6 +369,7 @@ void RunDebloat() {
         std::wstring message;
         if (core::RemoveCurrentUserApp(apps[index].id, message)) ++succeeded;
         report << apps[index].name << L": " << message << L"\n\n";
+        g_debloatSelected[index] = false;
     }
     g_status = L"Debloat finalizado: " + std::to_wstring(succeeded) +
         L" de " + std::to_wstring(selected.size()) + L" removido(s).";

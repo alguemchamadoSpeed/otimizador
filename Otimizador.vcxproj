@@ -113,7 +113,7 @@
            Text="Microsoft.Web.WebView2 package missing. Run build.bat or restore NuGet packages." />
   </Target>
 
-  <Target Name="BuildWebUi" BeforeTargets="Build">
+  <Target Name="BuildWebUi" BeforeTargets="PrepareForBuild">
     <Exec Command="npm.cmd --prefix &quot;$(ProjectDir)ui&quot; install --no-audit --no-fund" />
     <Exec Command="npm.cmd --prefix &quot;$(ProjectDir)ui&quot; run build" />
   </Target>

@@ -27,10 +27,15 @@ bool RemoveCurrentUserApp(const std::wstring& packageId, std::wstring& message) 
         return false;
     }
 
-    // Package ID comes from a fixed allowlist; no arbitrary PowerShell input is accepted.
-    std::wstring script = L"$ErrorActionPreference='Stop'; $p=Get-AppxPackage -Name '" +
-        found->id + L"'; if ($null -eq $p) { exit 2 }; $p | Remove-AppxPackage; exit 0";
-    std::wstring command = L"powershell.exe -NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -Command \"" +
+    // The package name is fixed by the allowlist; arbitrary PowerShell input
+    // is never accepted by this function.
+    const std::wstring script =
+        L"$ErrorActionPreference='Stop'; "
+        L"$p=Get-AppxPackage -Name '" + found->id +
+        L"'; if ($null -eq $p) { exit 2 }; "
+        L"$p | Remove-AppxPackage -ErrorAction Stop; exit 0";
+    const std::wstring command =
+        L"powershell.exe -NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -Command \"" +
         script + L"\"";
 
     STARTUPINFOW startup{};
@@ -49,17 +54,23 @@ bool RemoveCurrentUserApp(const std::wstring& packageId, std::wstring& message) 
     }
 
     const DWORD wait = WaitForSingleObject(process.hProcess, 90000);
-    DWORD exitCode = 1;
-    if (wait == WAIT_OBJECT_0)
-        GetExitCodeProcess(process.hProcess, &exitCode);
-    else
-        TerminateProcess(process.hProcess, 1);
+    DWORD exitCode = ERROR_GEN_FAILURE;
+    if (wait == WAIT_OBJECT_0) {
+        if (!GetExitCodeProcess(process.hProcess, &exitCode))
+            exitCode = ERROR_GEN_FAILURE;
+    } else if (wait == WAIT_TIMEOUT) {
+        TerminateProcess(process.hProcess, ERROR_TIMEOUT);
+    }
 
     CloseHandle(process.hThread);
     CloseHandle(process.hProcess);
 
     if (wait == WAIT_TIMEOUT) {
         message = L"Tempo limite excedido. Verifique se o aplicativo ainda está em uso.";
+        return false;
+    }
+    if (wait == WAIT_FAILED) {
+        message = L"Não foi possível aguardar o processo do PowerShell.";
         return false;
     }
     if (exitCode == 0) {

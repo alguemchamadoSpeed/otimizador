@@ -540,7 +540,7 @@ void Click(int x, int y, int clientWidth) {
             if (x >= cardX + cardWidth - 105 && x <= cardX + cardWidth - 8 &&
                 y >= cardY + 10 && y <= cardY + 58) {
                 if (!core::IsWingetAvailable()) {
-                    ShowMessage(L"winget não está disponível.\\n\\nAbra a Microsoft Store e atualize o App Installer.");
+                    ShowMessage(L"winget não está disponível.\n\nAbra a Microsoft Store e atualize o App Installer.");
                 } else if (core::LaunchPackageInstall(packages[i])) {
                     g_status = L"Instalador iniciado em uma janela de terminal: " + packages[i].name;
                 } else {

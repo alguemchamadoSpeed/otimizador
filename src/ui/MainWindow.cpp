@@ -375,7 +375,14 @@ void InitializeWebView(HWND hwnd) {
                                 return E_FAIL;
                             }
 
-                            result = g_webView->SetVirtualHostNameToFolderMapping(
+                            ComPtr<ICoreWebView2_3> webView3;
+                            result = g_webView.As(&webView3);
+                            if (FAILED(result) || !webView3) {
+                                ShowWebViewError(result);
+                                return result;
+                            }
+
+                            result = webView3->SetVirtualHostNameToFolderMapping(
                                 L"app.local", webFolder.c_str(),
                                 COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW);
                             if (FAILED(result)) {

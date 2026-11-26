@@ -114,8 +114,8 @@
   </Target>
 
   <Target Name="BuildWebUi" BeforeTargets="PrepareForBuild">
-    <Exec Command="npm.cmd --prefix &quot;$(ProjectDir)ui&quot; install --no-audit --no-fund" />
-    <Exec Command="npm.cmd --prefix &quot;$(ProjectDir)ui&quot; run build" />
+    <Exec WorkingDirectory="$(ProjectDir)ui" Command="npm.cmd install --no-audit --no-fund" />
+    <Exec WorkingDirectory="$(ProjectDir)ui" Command="npm.cmd run build" />
   </Target>
   <Target Name="CopyWebUi" AfterTargets="Build">
     <ItemGroup>

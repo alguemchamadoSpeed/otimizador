@@ -2,7 +2,7 @@ name: Windows build
 
 on:
   push:
-    branches: [ main, feature/** ]
+    branches: [ main, ui/** ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
@@ -14,15 +14,30 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Download NuGet CLI and restore WebView2 SDK
+        shell: pwsh
+        run: |
+          $nuget = Join-Path $env:RUNNER_TEMP "nuget.exe"
+          Invoke-WebRequest -UseBasicParsing -Uri "https://dist.nuget.org/win-x86-commandline/latest/nuget.exe" -OutFile $nuget
+          & $nuget restore Otimizador.sln -PackagesDirectory packages -NonInteractive
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Configure MSBuild
         uses: microsoft/setup-msbuild@v2
 
-      - name: Build Release x64
+      - name: Build C++ host and React UI (Release x64)
         run: msbuild Otimizador.sln /m /t:Build /p:Configuration=Release /p:Platform=x64 /v:minimal
 
-      - name: Upload executable
+      - name: Upload application
         uses: actions/upload-artifact@v4
         with:
           name: Otimizador-Windows-x64
-          path: bin/x64/Release/Otimizador.exe
+          path: |
+            bin/x64/Release/Otimizador.exe
+            bin/x64/Release/web/
           if-no-files-found: error

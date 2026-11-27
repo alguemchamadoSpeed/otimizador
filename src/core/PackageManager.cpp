@@ -1,7 +1,7 @@
 #include "PackageManager.hpp"
 #include <Windows.h>
 #include <Shellapi.h>
-#include <array>
+#include <algorithm>
 
 #pragma comment(lib, "Shell32.lib")
 
@@ -28,6 +28,14 @@ bool IsWingetAvailable() {
 }
 
 bool LaunchPackageInstall(const PackageInfo& package) {
+    // Accept only IDs from the built-in catalog. This prevents callers from
+    // injecting arbitrary command-line arguments through PackageInfo.
+    const auto& catalog = GetPackages();
+    const auto trusted = std::find_if(catalog.begin(), catalog.end(),
+        [&](const PackageInfo& item) { return item.id == package.id; });
+    if (trusted == catalog.end())
+        return false;
+
     if (!IsWingetAvailable()) {
         ShellExecuteW(nullptr, L"open",
             L"ms-windows-store://pdp/?ProductId=9NBLGGH4NNS1",
@@ -35,8 +43,8 @@ bool LaunchPackageInstall(const PackageInfo& package) {
         return false;
     }
 
-    // IDs are constants from the built-in catalog, never raw user input.
-    std::wstring command = L"/k winget install --id \"" + package.id +
+    // The package ID is now guaranteed to come from the fixed allowlist.
+    const std::wstring command = L"/k winget install --id \"" + trusted->id +
         L"\" -e --source winget";
     const auto result = reinterpret_cast<INT_PTR>(
         ShellExecuteW(nullptr, L"open", L"cmd.exe", command.c_str(), nullptr, SW_SHOWNORMAL));

@@ -22,17 +22,17 @@ namespace {
 enum class Page { Home, Cleaner, Debloat, Apps, Tools };
 
 constexpr int SidebarWidth = 218;
-constexpr COLORREF Bg = RGB(12, 16, 24);
-constexpr COLORREF SidebarBg = RGB(15, 21, 31);
-constexpr COLORREF Panel = RGB(21, 29, 42);
-constexpr COLORREF PanelHover = RGB(27, 38, 54);
-constexpr COLORREF Border = RGB(39, 50, 68);
-constexpr COLORREF Text = RGB(238, 242, 249);
-constexpr COLORREF Muted = RGB(148, 161, 181);
-constexpr COLORREF Accent = RGB(104, 137, 255);
-constexpr COLORREF AccentDark = RGB(39, 57, 104);
-constexpr COLORREF Green = RGB(77, 196, 145);
-constexpr COLORREF Orange = RGB(240, 174, 91);
+constexpr COLORREF Bg = RGB(9, 13, 21);
+constexpr COLORREF SidebarBg = RGB(12, 18, 29);
+constexpr COLORREF Panel = RGB(18, 27, 41);
+constexpr COLORREF PanelHover = RGB(27, 40, 59);
+constexpr COLORREF Border = RGB(38, 54, 75);
+constexpr COLORREF Text = RGB(240, 244, 252);
+constexpr COLORREF Muted = RGB(145, 160, 183);
+constexpr COLORREF Accent = RGB(112, 132, 255);
+constexpr COLORREF AccentDark = RGB(35, 47, 83);
+constexpr COLORREF Green = RGB(78, 205, 158);
+constexpr COLORREF Orange = RGB(245, 177, 93);
 
 HWND g_window = nullptr;
 Page g_page = Page::Home;
@@ -68,7 +68,7 @@ void RoundPanel(HDC dc, int x, int y, int width, int height,
     HPEN pen = CreatePen(PS_SOLID, 1, outline);
     HGDIOBJ oldBrush = SelectObject(dc, brush);
     HGDIOBJ oldPen = SelectObject(dc, pen);
-    RoundRect(dc, r.left, r.top, r.right, r.bottom, 12, 12);
+    RoundRect(dc, r.left, r.top, r.right, r.bottom, 16, 16);
     SelectObject(dc, oldBrush);
     SelectObject(dc, oldPen);
     DeleteObject(brush);
@@ -107,14 +107,33 @@ void Button(HDC dc, int x, int y, int width, int height, const std::wstring& lab
 }
 
 void Header(HDC dc, const std::wstring& title, const std::wstring& subtitle) {
-    TextAt(dc, title, 250, 28, 720, Text, g_fontTitle);
-    TextAt(dc, subtitle, 251, 72, 740, Muted, g_fontSmall);
+    TextAt(dc, L"OTIMIZADOR  /  WINDOWS 10 • 11", 250, 20, 420, Muted, g_fontSmall);
+    TextAt(dc, title, 250, 43, 760, Text, g_fontTitle);
+    TextAt(dc, subtitle, 252, 84, 800, Muted, g_fontSmall);
+
+    // Small status indicator in the page header.
+    RoundPanel(dc, 854, 30, 174, 34, RGB(17, 43, 39), RGB(30, 79, 67));
+    HBRUSH dot = CreateSolidBrush(Green);
+    RECT dotRect{ 869, 43, 877, 51 };
+    FillRect(dc, &dotRect, dot);
+    DeleteObject(dot);
+    TextAt(dc, L"PROTEÇÃO PRESERVADA", 884, 31, 132, Green, g_fontSmall);
 }
 
-void SidebarButton(HDC dc, int y, const wchar_t* label, Page page) {
+void SidebarButton(HDC dc, int y, const wchar_t* label, Page page, const wchar_t* symbol) {
     const bool active = g_page == page;
-    if (active) RoundPanel(dc, 14, y, 190, 42, AccentDark, AccentDark);
-    TextAt(dc, label, 30, y, 165, active ? Text : Muted, g_fontMedium);
+    if (active) {
+        RoundPanel(dc, 13, y, 192, 43, AccentDark, AccentDark);
+        RECT indicator{ 13, y + 9, 16, y + 34 };
+        Fill(dc, indicator, Accent);
+    }
+
+    RoundPanel(dc, 27, y + 10, 25, 23,
+        active ? RGB(54, 69, 117) : RGB(23, 33, 49),
+        active ? RGB(54, 69, 117) : RGB(23, 33, 49));
+    TextAt(dc, symbol, 27, y + 8, 25, active ? RGB(226, 233, 255) : Muted,
+        g_fontMedium, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+    TextAt(dc, label, 64, y, 130, active ? Text : Muted, g_fontMedium);
 }
 
 void RefreshSystem() {
@@ -128,112 +147,186 @@ void OpenUrl(const wchar_t* url) {
 void DrawSidebar(HDC dc) {
     RECT r{ 0, 0, SidebarWidth, 4000 };
     Fill(dc, r, SidebarBg);
-    RoundPanel(dc, 18, 24, 42, 42, Accent, Accent);
-    TextAt(dc, L"O", 18, 24, 42, RGB(255, 255, 255), g_fontTitle, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
-    TextAt(dc, L"OTIMIZADOR", 70, 23, 130, Text, g_fontMedium);
-    TextAt(dc, L"WINDOWS 10 / 11", 70, 47, 130, Muted, g_fontSmall);
-    TextAt(dc, L"MENU PRINCIPAL", 25, 100, 170, Muted, g_fontSmall);
-    SidebarButton(dc, 128, L"Visão geral", Page::Home);
-    SidebarButton(dc, 176, L"Limpeza", Page::Cleaner);
-    SidebarButton(dc, 224, L"Debloat seletivo", Page::Debloat);
-    SidebarButton(dc, 272, L"Instalar aplicativos", Page::Apps);
-    SidebarButton(dc, 320, L"Ferramentas", Page::Tools);
+    RECT edge{ SidebarWidth - 1, 0, SidebarWidth, 4000 };
+    Fill(dc, edge, Border);
 
-    RECT line{ 22, 385, 195, 386 };
+    // Brand block
+    RoundPanel(dc, 22, 23, 44, 44, Accent, Accent);
+    TextAt(dc, L"O", 22, 21, 44, RGB(255, 255, 255), g_fontTitle,
+        DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+    TextAt(dc, L"OTIMIZADOR", 78, 23, 122, Text, g_fontMedium);
+    TextAt(dc, L"PC CARE  •  DESKTOP", 79, 47, 122, Muted, g_fontSmall);
+
+    RECT divider{ 22, 88, 196, 89 };
+    Fill(dc, divider, Border);
+    TextAt(dc, L"ESPAÇO DE TRABALHO", 26, 107, 170, Muted, g_fontSmall);
+
+    SidebarButton(dc, 136, L"Visão geral", Page::Home, L"⌂");
+    SidebarButton(dc, 186, L"Limpeza", Page::Cleaner, L"✦");
+    SidebarButton(dc, 236, L"Debloat seletivo", Page::Debloat, L"−");
+    SidebarButton(dc, 286, L"Aplicativos", Page::Apps, L"+");
+    SidebarButton(dc, 336, L"Ferramentas", Page::Tools, L"⚙");
+
+    RECT line{ 22, 408, 196, 409 };
     Fill(dc, line, Border);
-    TextAt(dc, L"SEGURO POR PADRÃO", 25, 405, 170, Green, g_fontSmall);
-    WrappedText(dc, L"Sem desativar Defender, firewall, Windows Update ou serviços essenciais.", 25, 433, 166, 68, Muted, g_fontSmall);
-    TextAt(dc, L"v1.0.0  •  C++17", 25, 520, 170, Muted, g_fontSmall);
+    TextAt(dc, L"FEITO PARA WINDOWS", 26, 430, 170, Green, g_fontSmall);
+    WrappedText(dc,
+        L"Ações transparentes e seletivas. Nenhum serviço essencial é desativado automaticamente.",
+        26, 457, 166, 90, Muted, g_fontSmall);
+
+    RoundPanel(dc, 20, 624, 178, 62, RGB(16, 25, 38), Border);
+    TextAt(dc, L"VERSÃO 1.1", 34, 632, 145, Text, g_fontMedium);
+    TextAt(dc, L"Windows 10 / 11  •  x64", 34, 657, 145, Muted, g_fontSmall);
 }
 
 void DrawHome(HDC dc, int contentWidth) {
-    Header(dc, L"Seu Windows, sob controle.", L"Ferramentas práticas para preparar o PC depois de uma formatação.");
-    const int gap = 14;
+    Header(dc, L"Seu Windows, mais leve.", L"Um painel simples para organizar o PC depois de uma formatação.");
+
+    // Main hero: puts the two most-used actions first.
+    RoundPanel(dc, 250, 126, contentWidth, 164, RGB(20, 31, 51), RGB(48, 67, 104));
+    RoundPanel(dc, 270, 147, 4, 118, Accent, Accent);
+    TextAt(dc, L"PRONTO PARA COMEÇAR?", 290, 146, 360, Muted, g_fontSmall);
+    TextAt(dc, L"Cuide do seu PC em poucos passos.", 290, 173, contentWidth - 320, Text, g_fontTitle);
+    WrappedText(dc,
+        L"Limpe arquivos temporários, revise aplicativos pré-instalados e instale suas ferramentas favoritas.",
+        292, 211, contentWidth - 330, 40, Muted, g_fontSmall);
+    Button(dc, 292, 247, 178, 34, L"Abrir limpeza", true);
+    Button(dc, 482, 247, 178, 34, L"Revisar aplicativos", false);
+
+    // System overview cards
+    const int gap = 13;
     const int cardWidth = (contentWidth - gap * 2) / 3;
-    const int y = 126;
-    RoundPanel(dc, 250, y, cardWidth, 142);
-    RoundPanel(dc, 250 + cardWidth + gap, y, cardWidth, 142);
-    RoundPanel(dc, 250 + (cardWidth + gap) * 2, y, cardWidth, 142);
+    const int y = 310;
+    const int x1 = 250;
+    const int x2 = x1 + cardWidth + gap;
+    const int x3 = x2 + cardWidth + gap;
 
-    TextAt(dc, L"SISTEMA", 270, y + 18, cardWidth - 35, Muted, g_fontSmall);
-    TextAt(dc, g_system.windowsName, 270, y + 48, cardWidth - 35, Text, g_fontTitle);
-    TextAt(dc, g_system.windowsVersion, 270, y + 91, cardWidth - 35, Muted, g_fontSmall);
+    RoundPanel(dc, x1, y, cardWidth, 132);
+    RoundPanel(dc, x2, y, cardWidth, 132);
+    RoundPanel(dc, x3, y, cardWidth, 132);
 
-    TextAt(dc, L"MEMÓRIA RAM", 290 + cardWidth, y + 18, cardWidth - 35, Muted, g_fontSmall);
-    TextAt(dc, g_system.memory, 290 + cardWidth, y + 48, cardWidth - 35, Text, g_fontTitle);
-    TextAt(dc, g_system.memoryDetail, 290 + cardWidth, y + 91, cardWidth - 35, Muted, g_fontSmall);
+    TextAt(dc, L"SISTEMA OPERACIONAL", x1 + 19, y + 16, cardWidth - 32, Muted, g_fontSmall);
+    TextAt(dc, g_system.windowsName, x1 + 19, y + 47, cardWidth - 32, Text, g_fontTitle);
+    TextAt(dc, g_system.windowsVersion, x1 + 19, y + 91, cardWidth - 32, Muted, g_fontSmall);
 
-    TextAt(dc, L"ESPAÇO LIVRE", 290 + (cardWidth + gap) * 2, y + 18, cardWidth - 35, Muted, g_fontSmall);
-    TextAt(dc, g_system.diskFree, 290 + (cardWidth + gap) * 2, y + 48, cardWidth - 35, Text, g_fontTitle);
-    TextAt(dc, g_system.diskDetail, 290 + (cardWidth + gap) * 2, y + 91, cardWidth - 35, Muted, g_fontSmall);
+    TextAt(dc, L"MEMÓRIA INSTALADA", x2 + 19, y + 16, cardWidth - 32, Muted, g_fontSmall);
+    TextAt(dc, g_system.memory, x2 + 19, y + 47, cardWidth - 32, Text, g_fontTitle);
+    TextAt(dc, g_system.memoryDetail, x2 + 19, y + 91, cardWidth - 32, Muted, g_fontSmall);
 
-    RoundPanel(dc, 250, 286, contentWidth, 114);
-    TextAt(dc, L"PROCESSADOR", 272, 302, contentWidth - 40, Muted, g_fontSmall);
-    TextAt(dc, g_system.processor, 272, 331, contentWidth - 45, Text, g_fontMedium, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+    TextAt(dc, L"ESPAÇO LIVRE", x3 + 19, y + 16, cardWidth - 32, Muted, g_fontSmall);
+    TextAt(dc, g_system.diskFree, x3 + 19, y + 47, cardWidth - 32, Text, g_fontTitle);
+    TextAt(dc, g_system.diskDetail, x3 + 19, y + 91, cardWidth - 32, Muted, g_fontSmall);
 
-    TextAt(dc, L"PRIMEIROS PASSOS", 250, 432, contentWidth, Muted, g_fontSmall);
+    RoundPanel(dc, 250, 463, contentWidth, 83);
+    TextAt(dc, L"PROCESSADOR DETECTADO", 272, 477, contentWidth - 40, Muted, g_fontSmall);
+    TextAt(dc, g_system.processor, 272, 505, contentWidth - 48, Text, g_fontMedium,
+        DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+
+    TextAt(dc, L"FLUXO RECOMENDADO", 250, 568, contentWidth, Muted, g_fontSmall);
     const int half = (contentWidth - 14) / 2;
-    RoundPanel(dc, 250, 461, half, 142);
-    RoundPanel(dc, 264 + half, 461, half, 142);
-    TextAt(dc, L"1. Limpe arquivos temporários", 270, 479, half - 35, Text, g_fontMedium);
-    WrappedText(dc, L"Remova arquivos temporários do seu perfil para recuperar espaço em disco.", 270, 510, half - 38, 42);
-    Button(dc, 270, 556, 170, 34, L"Abrir limpeza", true);
-
-    TextAt(dc, L"2. Revise aplicativos opcionais", 284 + half, 479, half - 35, Text, g_fontMedium);
-    WrappedText(dc, L"Escolha individualmente quais aplicativos pré-instalados você realmente não usa.", 284 + half, 510, half - 38, 42);
-    Button(dc, 284 + half, 556, 170, 34, L"Abrir debloat", false);
+    RoundPanel(dc, 250, 594, half, 82);
+    RoundPanel(dc, 264 + half, 594, half, 82);
+    TextAt(dc, L"01  •  Remova arquivos temporários", 270, 602, half - 34, Text, g_fontMedium);
+    WrappedText(dc, L"Libere espaço sem tocar em pastas do sistema.", 270, 630, half - 34, 34, Muted, g_fontSmall);
+    TextAt(dc, L"02  •  Revise os apps pré-instalados", 284 + half, 602, half - 34, Text, g_fontMedium);
+    WrappedText(dc, L"Escolha manualmente o que realmente não utiliza.", 284 + half, 630, half - 34, 34, Muted, g_fontSmall);
 }
 
 void DrawCleaner(HDC dc, int contentWidth) {
-    Header(dc, L"Limpeza inteligente", L"Arquivos temporários do seu perfil. Arquivos em uso ou protegidos serão ignorados.");
-    RoundPanel(dc, 250, 132, contentWidth, 205);
-    TextAt(dc, L"ARQUIVOS TEMPORÁRIOS DO USUÁRIO", 274, 153, contentWidth - 45, Muted, g_fontSmall);
-    TextAt(dc, FormatBytes(g_tempBytes), 274, 184, 400, Text, g_fontTitle);
-    TextAt(dc, L"Local: %LOCALAPPDATA%\\Temp", 274, 230, contentWidth - 50, Muted, g_fontSmall);
-    TextAt(dc, L"A limpeza não percorre atalhos, junctions ou links simbólicos.", 274, 253, contentWidth - 50, Muted, g_fontSmall);
-    Button(dc, 274, 287, 220, 36, L"Limpar temporários", true);
+    Header(dc, L"Limpeza inteligente", L"Confira o que será removido antes de executar cada ação.");
 
-    RoundPanel(dc, 250, 363, contentWidth, 154);
-    TextAt(dc, L"LIXEIRA DO WINDOWS", 274, 383, contentWidth - 45, Muted, g_fontSmall);
-    TextAt(dc, L"Remova os itens da Lixeira para liberar espaço.", 274, 414, contentWidth - 45, Text, g_fontMedium);
-    WrappedText(dc, L"A ação é permanente. Confira a Lixeira antes de continuar.", 274, 445, contentWidth - 50, 35);
-    Button(dc, 274, 468, 180, 36, L"Esvaziar Lixeira", false);
+    const int gap = 16;
+    const int half = (contentWidth - gap) / 2;
+    const int rightX = 250 + half + gap;
 
-    TextAt(dc, g_status, 250, 550, contentWidth, Green, g_fontSmall);
+    RoundPanel(dc, 250, 132, half, 316);
+    RoundPanel(dc, rightX, 132, half, 316);
+
+    RoundPanel(dc, 272, 153, 42, 42, AccentDark, AccentDark);
+    TextAt(dc, L"✦", 272, 151, 42, RGB(226, 232, 255), g_fontMedium,
+        DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+    TextAt(dc, L"ARQUIVOS TEMPORÁRIOS", 328, 153, half - 95, Muted, g_fontSmall);
+    TextAt(dc, FormatBytes(g_tempBytes), 274, 221, half - 42, Text, g_fontTitle);
+    TextAt(dc, L"Tamanho estimado no perfil atual", 276, 263, half - 48, Muted, g_fontSmall);
+    RECT sep1{ 274, 300, 250 + half - 22, 301 };
+    Fill(dc, sep1, Border);
+    TextAt(dc, L"Local: %LOCALAPPDATA%\\Temp", 276, 316, half - 45, Text, g_fontSmall);
+    WrappedText(dc, L"Arquivos em uso, protegidos e links simbólicos são ignorados.",
+        276, 344, half - 48, 42, Muted, g_fontSmall);
+    Button(dc, 276, 394, half - 52, 38, L"Limpar temporários", true);
+
+    RoundPanel(dc, rightX + 22, 153, 42, 42, RGB(55, 43, 30), RGB(87, 65, 38));
+    TextAt(dc, L"↻", rightX + 22, 151, 42, Orange, g_fontMedium,
+        DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+    TextAt(dc, L"LIXEIRA DO WINDOWS", rightX + 78, 153, half - 100, Muted, g_fontSmall);
+    TextAt(dc, L"Recupere espaço", rightX + 24, 221, half - 44, Text, g_fontTitle);
+    WrappedText(dc, L"Os itens da Lixeira serão removidos permanentemente. Confira antes de continuar.",
+        rightX + 26, 270, half - 52, 66, Muted, g_fontSmall);
+    RECT sep2{ rightX + 24, 350, rightX + half - 22, 351 };
+    Fill(dc, sep2, Border);
+    TextAt(dc, L"Ação permanente • exige confirmação", rightX + 26, 363,
+        half - 48, Orange, g_fontSmall);
+    Button(dc, rightX + 26, 394, half - 52, 38, L"Esvaziar Lixeira", false);
+
+    RoundPanel(dc, 250, 470, contentWidth, 88, RGB(16, 25, 38), Border);
+    TextAt(dc, L"ESTADO DA ÚLTIMA OPERAÇÃO", 272, 482, contentWidth - 44, Muted, g_fontSmall);
+    TextAt(dc, g_status, 272, 511, contentWidth - 44, Green, g_fontMedium);
+    TextAt(dc, L"Dica: feche programas que estejam usando arquivos temporários antes da limpeza.",
+        250, 578, contentWidth, Muted, g_fontSmall);
 }
 
 void DrawDebloat(HDC dc, int contentWidth) {
-    Header(dc, L"Debloat seletivo", L"Marque somente os apps opcionais que não usa. A remoção afeta apenas seu usuário.");
-    TextAt(dc, L"APLICATIVOS OPCIONAIS", 250, 116, contentWidth, Muted, g_fontSmall);
+    Header(dc, L"Debloat seletivo", L"Você escolhe. Nenhum aplicativo é removido sem marcar e confirmar.");
 
     const auto& apps = core::GetOptionalApps();
+    unsigned int selectedCount = 0;
+    for (std::size_t i = 0; i < apps.size(); ++i)
+        if (g_debloatSelected[i]) ++selectedCount;
+
+    RoundPanel(dc, 250, 119, contentWidth, 39, RGB(18, 31, 48), Border);
+    TextAt(dc, L"APLICATIVOS OPCIONAIS", 268, 119, 250, Muted, g_fontSmall);
+    TextAt(dc, std::to_wstring(selectedCount) + L" selecionado(s)",
+        250 + contentWidth - 190, 119, 170, Accent, g_fontMedium,
+        DT_RIGHT | DT_SINGLELINE | DT_VCENTER);
+
     for (std::size_t i = 0; i < apps.size(); ++i) {
-        const int y = 143 + static_cast<int>(i) * 49;
-        RoundPanel(dc, 250, y, contentWidth, 43, Panel, Border);
-        RECT check{ 266, y + 12, 283, y + 29 };
-        Fill(dc, check, g_debloatSelected[i] ? Accent : RGB(31, 41, 56));
+        const int y = 170 + static_cast<int>(i) * 47;
+        RoundPanel(dc, 250, y, contentWidth, 42,
+            g_debloatSelected[i] ? RGB(24, 36, 58) : Panel,
+            g_debloatSelected[i] ? Accent : Border);
+
+        RECT check{ 267, y + 12, 285, y + 30 };
+        Fill(dc, check, g_debloatSelected[i] ? Accent : RGB(31, 43, 60));
         if (g_debloatSelected[i]) {
             HPEN pen = CreatePen(PS_SOLID, 2, RGB(255, 255, 255));
             HGDIOBJ old = SelectObject(dc, pen);
-            MoveToEx(dc, 270, y + 20, nullptr);
-            LineTo(dc, 275, y + 25);
-            LineTo(dc, 281, y + 15);
+            MoveToEx(dc, 271, y + 21, nullptr);
+            LineTo(dc, 276, y + 25);
+            LineTo(dc, 282, y + 16);
             SelectObject(dc, old);
             DeleteObject(pen);
         }
-        TextAt(dc, apps[i].name, 298, y + 3, contentWidth - 325, Text, g_fontMedium);
-        TextAt(dc, apps[i].description, 298, y + 22, contentWidth - 325, Muted, g_fontSmall);
+
+        TextAt(dc, apps[i].name, 300, y + 1, contentWidth - 330, Text, g_fontMedium);
+        TextAt(dc, apps[i].description, 300, y + 20, contentWidth - 330, Muted, g_fontSmall);
     }
-    Button(dc, 250, 552, 226, 38, L"Remover selecionados", true);
-    TextAt(dc, g_status, 490, 552, contentWidth - 245, Muted, g_fontSmall);
+
+    Button(dc, 250, 558, 228, 39, L"Remover selecionados", true, selectedCount == 0);
+    TextAt(dc, g_status, 496, 558, contentWidth - 248, Muted, g_fontSmall);
+    TextAt(dc, L"Os apps são removidos apenas do usuário atual. A reinstalação pode depender da Microsoft Store.",
+        250, 614, contentWidth, Muted, g_fontSmall);
 }
 
 void DrawApps(HDC dc, int contentWidth) {
-    Header(dc, L"Instalar aplicativos", L"Instalações via Windows Package Manager (winget), com IDs exatos.");
+    Header(dc, L"Biblioteca de aplicativos", L"Instale ferramentas conhecidas pelo Windows Package Manager.");
+
     const bool winget = core::IsWingetAvailable();
-    RoundPanel(dc, 250, 112, contentWidth, 48);
-    TextAt(dc, winget ? L"winget detectado — pronto para instalar." : L"winget não encontrado. Atualize o App Installer pela Microsoft Store.",
-        270, 112, contentWidth - 40, winget ? Green : Orange, g_fontSmall);
+    RoundPanel(dc, 250, 119, contentWidth, 46,
+        winget ? RGB(16, 39, 35) : RGB(48, 35, 23),
+        winget ? RGB(37, 83, 68) : RGB(94, 68, 38));
+    TextAt(dc, winget ? L"●  WINGET DISPONÍVEL  •  pronto para instalar"
+                      : L"●  WINGET NÃO ENCONTRADO  •  atualize o App Installer pela Microsoft Store",
+        270, 119, contentWidth - 40, winget ? Green : Orange, g_fontSmall);
 
     const auto& packages = core::GetPackages();
     const int gap = 14;
@@ -242,46 +335,59 @@ void DrawApps(HDC dc, int contentWidth) {
         const int col = static_cast<int>(i % 2);
         const int row = static_cast<int>(i / 2);
         const int x = 250 + col * (cardWidth + gap);
-        const int y = 176 + row * 78;
-        RoundPanel(dc, x, y, cardWidth, 68);
-        TextAt(dc, packages[i].name, x + 15, y + 9, cardWidth - 125, Text, g_fontMedium);
-        TextAt(dc, packages[i].description, x + 15, y + 34, cardWidth - 125, Muted, g_fontSmall);
-        Button(dc, x + cardWidth - 102, y + 17, 88, 34, L"Instalar", true);
+        const int y = 181 + row * 76;
+
+        RoundPanel(dc, x, y, cardWidth, 66);
+        RoundPanel(dc, x + 13, y + 16, 34, 34,
+            RGB(34, 46, 71), RGB(48, 64, 96));
+        TextAt(dc, L"↗", x + 13, y + 14, 34, Accent, g_fontMedium,
+            DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+        TextAt(dc, packages[i].name, x + 58, y + 7, cardWidth - 172, Text, g_fontMedium);
+        TextAt(dc, packages[i].description, x + 58, y + 32, cardWidth - 172, Muted, g_fontSmall);
+        Button(dc, x + cardWidth - 101, y + 16, 88, 34, L"Instalar", true, !winget);
     }
-    TextAt(dc, g_status, 250, 585, contentWidth, Muted, g_fontSmall);
+
+    TextAt(dc, g_status, 250, 586, contentWidth, Muted, g_fontSmall);
 }
 
 void DrawTools(HDC dc, int contentWidth) {
-    Header(dc, L"Ferramentas extras", L"Atalhos úteis e ferramentas opcionais da comunidade.");
+    Header(dc, L"Ferramentas extras", L"Atalhos para configurações úteis do próprio Windows e projetos externos.");
+
     const int half = (contentWidth - 14) / 2;
+    const int rightX = 264 + half;
 
     RoundPanel(dc, 250, 130, half, 145);
-    TextAt(dc, L"INICIALIZAÇÃO DO WINDOWS", 272, 151, half - 40, Muted, g_fontSmall);
-    TextAt(dc, L"Revise o que inicia com o PC", 272, 181, half - 40, Text, g_fontMedium);
-    WrappedText(dc, L"Abre as configurações oficiais de aplicativos de inicialização.", 272, 210, half - 42, 38);
+    TextAt(dc, L"01  /  INICIALIZAÇÃO", 272, 151, half - 40, Muted, g_fontSmall);
+    TextAt(dc, L"Controle o que inicia", 272, 181, half - 40, Text, g_fontMedium);
+    WrappedText(dc, L"Revise os aplicativos que iniciam junto com o Windows.",
+        272, 210, half - 42, 38, Muted, g_fontSmall);
     Button(dc, 272, 237, 174, 32, L"Abrir configurações", true);
 
-    RoundPanel(dc, 264 + half, 130, half, 145);
-    TextAt(dc, L"APLICATIVOS INSTALADOS", 286 + half, 151, half - 40, Muted, g_fontSmall);
-    TextAt(dc, L"Gerencie programas do PC", 286 + half, 181, half - 40, Text, g_fontMedium);
-    WrappedText(dc, L"Use a página oficial do Windows para alterar ou desinstalar programas.", 286 + half, 210, half - 42, 38);
-    Button(dc, 286 + half, 237, 174, 32, L"Abrir aplicativos", false);
+    RoundPanel(dc, rightX, 130, half, 145);
+    TextAt(dc, L"02  /  PROGRAMAS", rightX + 22, 151, half - 40, Muted, g_fontSmall);
+    TextAt(dc, L"Aplicativos instalados", rightX + 22, 181, half - 40, Text, g_fontMedium);
+    WrappedText(dc, L"Use a tela oficial do Windows para alterar ou remover programas.",
+        rightX + 22, 210, half - 42, 38, Muted, g_fontSmall);
+    Button(dc, rightX + 22, 237, 174, 32, L"Abrir aplicativos", false);
 
-    TextAt(dc, L"FERRAMENTAS DA COMUNIDADE", 250, 316, contentWidth, Muted, g_fontSmall);
+    TextAt(dc, L"PROJETOS DA COMUNIDADE", 250, 316, contentWidth, Muted, g_fontSmall);
 
     RoundPanel(dc, 250, 344, half, 132);
     TextAt(dc, L"SpotifyLite", 272, 362, half - 40, Text, g_fontMedium);
-    WrappedText(dc, L"Projeto de terceiros da TeamAntiLag. Confira a página do release e valide o arquivo antes de executar.", 272, 390, half - 42, 48);
+    WrappedText(dc, L"Projeto de terceiros da TeamAntiLag. Leia as notas do release e valide o arquivo antes de executar.",
+        272, 390, half - 42, 48, Muted, g_fontSmall);
     Button(dc, 272, 441, 174, 30, L"Ver release", true);
 
-    RoundPanel(dc, 264 + half, 344, half, 132);
-    TextAt(dc, L"DiscordDebloat v2.1", 286 + half, 362, half - 40, Text, g_fontMedium);
-    WrappedText(dc, L"Ferramenta de terceiros para personalizar o Discord. Leia as notas e confirme a compatibilidade.", 286 + half, 390, half - 42, 48);
-    Button(dc, 286 + half, 441, 174, 30, L"Ver release", false);
+    RoundPanel(dc, rightX, 344, half, 132);
+    TextAt(dc, L"DiscordDebloat v2.1", rightX + 22, 362, half - 40, Text, g_fontMedium);
+    WrappedText(dc, L"Ferramenta de terceiros para personalizar o Discord. Confira as notas e a compatibilidade.",
+        rightX + 22, 390, half - 42, 48, Muted, g_fontSmall);
+    Button(dc, rightX + 22, 441, 174, 30, L"Ver release", false);
 
     RoundPanel(dc, 250, 496, contentWidth, 88);
     TextAt(dc, L"SEGURANÇA E MANUTENÇÃO", 272, 512, contentWidth - 40, Muted, g_fontSmall);
-    TextAt(dc, L"Abra o Windows Update ou a Segurança do Windows para revisar atualizações e proteção.", 272, 541, contentWidth - 45, Text, g_fontSmall);
+    TextAt(dc, L"Defender, firewall e Windows Update permanecem sob controle do Windows.",
+        272, 541, contentWidth - 225, Text, g_fontSmall);
     Button(dc, 250 + contentWidth - 190, 520, 168, 38, L"Segurança do Windows", false);
 }
 
@@ -380,11 +486,12 @@ void RunDebloat() {
 
 void Click(int x, int y, int clientWidth) {
     if (x < SidebarWidth) {
-        if (y >= 128 && y < 170) g_page = Page::Home;
-        else if (y >= 176 && y < 218) g_page = Page::Cleaner;
-        else if (y >= 224 && y < 266) g_page = Page::Debloat;
-        else if (y >= 272 && y < 314) g_page = Page::Apps;
-        else if (y >= 320 && y < 362) g_page = Page::Tools;
+        if (y >= 136 && y < 179) g_page = Page::Home;
+        else if (y >= 186 && y < 229) g_page = Page::Cleaner;
+        else if (y >= 236 && y < 279) g_page = Page::Debloat;
+        else if (y >= 286 && y < 329) g_page = Page::Apps;
+        else if (y >= 336 && y < 379) g_page = Page::Tools;
+
         if (g_page == Page::Cleaner) g_tempBytes = core::GetTemporaryFilesSize();
         if (g_page == Page::Home) RefreshSystem();
         InvalidateRect(g_window, nullptr, TRUE);
@@ -393,30 +500,34 @@ void Click(int x, int y, int clientWidth) {
 
     const int contentWidth = std::max(450, clientWidth - SidebarWidth - 42);
     if (g_page == Page::Home) {
-        const int half = (contentWidth - 14) / 2;
-        if (y >= 556 && y <= 593) {
-            if (x >= 250 && x <= 250 + half) {
+        if (y >= 247 && y <= 281) {
+            if (x >= 292 && x <= 470) {
                 g_page = Page::Cleaner;
                 g_tempBytes = core::GetTemporaryFilesSize();
-            } else if (x >= 264 + half && x <= 264 + half * 2) {
+            } else if (x >= 482 && x <= 660) {
                 g_page = Page::Debloat;
             }
             InvalidateRect(g_window, nullptr, TRUE);
         }
     } else if (g_page == Page::Cleaner) {
-        if (x >= 270 && x <= 500 && y >= 287 && y <= 326) RunCleanup();
-        else if (x >= 270 && x <= 465 && y >= 468 && y <= 507) RunRecycleBin();
+        const int half = (contentWidth - 16) / 2;
+        const int rightX = 250 + half + 16;
+        if (x >= 276 && x <= 276 + half - 52 && y >= 394 && y <= 432) {
+            RunCleanup();
+        } else if (x >= rightX + 26 && x <= rightX + half - 26 && y >= 394 && y <= 432) {
+            RunRecycleBin();
+        }
     } else if (g_page == Page::Debloat) {
         const auto& apps = core::GetOptionalApps();
         for (std::size_t i = 0; i < apps.size(); ++i) {
-            const int rowY = 143 + static_cast<int>(i) * 49;
-            if (x >= 250 && x <= 250 + contentWidth && y >= rowY && y <= rowY + 43) {
+            const int rowY = 170 + static_cast<int>(i) * 47;
+            if (x >= 250 && x <= 250 + contentWidth && y >= rowY && y <= rowY + 42) {
                 g_debloatSelected[i] = !g_debloatSelected[i];
                 InvalidateRect(g_window, nullptr, TRUE);
                 return;
             }
         }
-        if (x >= 250 && x <= 480 && y >= 552 && y <= 590) RunDebloat();
+        if (x >= 250 && x <= 478 && y >= 558 && y <= 597) RunDebloat();
     } else if (g_page == Page::Apps) {
         const auto& packages = core::GetPackages();
         const int gap = 14;
@@ -425,9 +536,9 @@ void Click(int x, int y, int clientWidth) {
             const int col = static_cast<int>(i % 2);
             const int row = static_cast<int>(i / 2);
             const int cardX = 250 + col * (cardWidth + gap);
-            const int cardY = 176 + row * 78;
-            if (x >= cardX + cardWidth - 108 && x <= cardX + cardWidth - 8 &&
-                y >= cardY + 10 && y <= cardY + 60) {
+            const int cardY = 181 + row * 76;
+            if (x >= cardX + cardWidth - 105 && x <= cardX + cardWidth - 8 &&
+                y >= cardY + 10 && y <= cardY + 58) {
                 if (!core::IsWingetAvailable()) {
                     ShowMessage(L"winget não está disponível.\n\nAbra a Microsoft Store e atualize o App Installer.");
                 } else if (core::LaunchPackageInstall(packages[i])) {
@@ -441,13 +552,14 @@ void Click(int x, int y, int clientWidth) {
         }
     } else if (g_page == Page::Tools) {
         const int half = (contentWidth - 14) / 2;
-        if (x >= 270 && x <= 455 && y >= 237 && y <= 270)
+        const int rightX = 264 + half;
+        if (x >= 272 && x <= 446 && y >= 237 && y <= 270)
             OpenUrl(L"ms-settings:startupapps");
-        else if (x >= 286 + half && x <= 470 + half && y >= 237 && y <= 270)
+        else if (x >= rightX + 22 && x <= rightX + 196 && y >= 237 && y <= 270)
             OpenUrl(L"ms-settings:appsfeatures");
-        else if (x >= 270 && x <= 455 && y >= 441 && y <= 475)
+        else if (x >= 272 && x <= 446 && y >= 441 && y <= 475)
             OpenUrl(L"https://github.com/TeamAntiLag/SpotifyLite/releases/tag/SpotifyLite");
-        else if (x >= 286 + half && x <= 470 + half && y >= 441 && y <= 475)
+        else if (x >= rightX + 22 && x <= rightX + 196 && y >= 441 && y <= 475)
             OpenUrl(L"https://github.com/TeamAntiLag/DiscordDebloat/releases/tag/v2.1");
         else if (x >= 250 + contentWidth - 195 && x <= 250 + contentWidth && y >= 520 && y <= 558)
             OpenUrl(L"ms-settings:windowsdefender");
@@ -467,15 +579,15 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         g_fontSmall = CreateFontW(-12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
             DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
-        g_fontTitle = CreateFontW(-25, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE,
+        g_fontTitle = CreateFontW(-28, 0, 0, 0, FW_SEMIBOLD, FALSE, FALSE, FALSE,
             DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
             DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
         RefreshSystem();
         return 0;
     case WM_GETMINMAXINFO: {
         auto* info = reinterpret_cast<MINMAXINFO*>(lParam);
-        info->ptMinTrackSize.x = 980;
-        info->ptMinTrackSize.y = 680;
+        info->ptMinTrackSize.x = 1020;
+        info->ptMinTrackSize.y = 720;
         return 0;
     }
     case WM_ERASEBKGND:
@@ -516,7 +628,7 @@ int RunMainWindow(HINSTANCE instance, int showCommand) {
         return 1;
 
     HWND hwnd = CreateWindowExW(0, className, L"Otimizador — Windows 10 / 11",
-        WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 1120, 760,
+        WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 1240, 820,
         nullptr, nullptr, instance, nullptr);
     if (!hwnd) return 1;
 

@@ -98,7 +98,7 @@ function Get-SystemSnapshot {
     $memory='Nao detectada'; $memoryDetail=''; $free='Indisponivel'; $diskDetail=''
     try {
         $os=Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
-        if ($os.ProductName) { $name=$os.ProductName -replace '^Microsoft ',' }
+        if ($os.ProductName) { $name=$os.ProductName -replace '^Microsoft ', '' }
         $v=if ($os.DisplayVersion) {$os.DisplayVersion} else {$os.ReleaseId}
         $version="$v | Build $($os.CurrentBuild)"
     } catch {}

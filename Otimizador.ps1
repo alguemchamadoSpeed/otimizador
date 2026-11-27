@@ -34,7 +34,7 @@ $script:F = @{
     Heading = [System.Drawing.Font]::new('Segoe UI', 12, [System.Drawing.FontStyle]::Bold)
     Body = [System.Drawing.Font]::new('Segoe UI', 9, [System.Drawing.FontStyle]::Regular)
     Small = [System.Drawing.Font]::new('Segoe UI', 8, [System.Drawing.FontStyle]::Regular)
-    Button = [System.Drawing.Font]::new('Segoe UI', 9, [System.Drawing.FontStyle]::Semibold)
+    Button = [System.Drawing.Font]::new('Segoe UI', 9, [System.Drawing.FontStyle]::Bold)
 }
 $script:Form = $null
 $script:Content = $null

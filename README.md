@@ -1,55 +1,60 @@
 # Otimizador
 
-Aplicativo nativo para Windows 10 e Windows 11, escrito em C++17 com Win32. O foco é ajudar quem acabou de formatar o PC a remover temporários, revisar aplicativos opcionais e instalar ferramentas úteis sem aplicar “tweaks mágicos”.
+Aplicativo para Windows 10 e Windows 11 com interface grafica em PowerShell 5.1/WinForms e inicializador BAT. O repositorio tambem mantem a implementacao nativa C++17 como versao legada. O foco e ajudar quem acabou de formatar o PC a limpar temporarios, revisar aplicativos opcionais e instalar ferramentas conhecidas sem aplicar "tweaks magicos".
+
+## Iniciar (recomendado)
+
+1. Baixe ou clone o repositorio.
+2. Deixe `Otimizador.bat` e `Otimizador.ps1` na mesma pasta.
+3. Execute `Otimizador.bat` com duplo clique.
+
+O `build.bat` antigo tambem encaminha para o novo inicializador, por compatibilidade. A interface PowerShell nao exige Visual Studio, MSBuild, Node.js ou bibliotecas externas. O BAT usa o Windows PowerShell 5.1 que acompanha o Windows 10/11 e aplica `ExecutionPolicy Bypass` somente ao processo iniciado, sem alterar a politica permanente do computador.
 
 ## Recursos
 
-- **Painel do sistema:** versão/build do Windows, processador, memória RAM e espaço livre na unidade do Windows.
-- **Limpeza:** apaga o conteúdo da pasta temporária do usuário (sem seguir junctions/symlinks) e oferece esvaziar a Lixeira após confirmação.
-- **Debloat seletivo:** lista aplicativos opcionais conhecidos e remove somente os pacotes escolhidos para o usuário atual. Não remove Store, Edge, Defender, WebView2, componentes de atualização ou drivers.
-- **Instalador:** usa o Windows Package Manager (winget) com IDs exatos para Brave, Discord, VS Code, Visual Studio 2022 Community, Git, 7-Zip, PowerToys e VLC.
-- **Ferramentas da comunidade:** abre as páginas de releases do SpotifyLite e DiscordDebloat no GitHub. O app não baixa nem executa esses binários automaticamente.
+- **Visao geral:** versao/build do Windows, processador, memoria RAM e espaco livre na unidade do Windows.
+- **Limpeza:** apaga o conteudo da pasta temporaria do usuario (sem seguir junctions/symlinks) e oferece esvaziar a Lixeira apos confirmacao.
+- **Debloat seletivo:** lista aplicativos opcionais conhecidos e remove somente os pacotes selecionados para o usuario atual. Nao remove Store, Edge, Defender, WebView2, componentes de atualizacao ou drivers.
+- **Instalador:** usa o Windows Package Manager (winget) com IDs fixos para Brave, Firefox, Discord, VS Code, Git, 7-Zip, PowerToys, VLC, Spotify e Visual Studio 2022 Community.
+- **Ferramentas:** abre as configuracoes oficiais de inicializacao, aplicativos instalados, Seguranca do Windows e Windows Update.
+- **Projetos externos:** abre as paginas de releases do SpotifyLite e DiscordDebloat no GitHub. O app nao baixa nem executa esses binarios automaticamente.
 
-## Compilar
+## Versao C++ legada (opcional)
 
-Requisitos: Windows 10/11, Visual Studio 2022 com o workload **Desenvolvimento para desktop com C++** (MSVC v143 e Windows SDK).
+A implementacao nativa Win32/C++17 permanece no repositorio. Para compila-la manualmente, use Visual Studio 2022 com o workload **Desenvolvimento para desktop com C++** (MSVC v143 e Windows SDK):
 
-1. Abra o arquivo Otimizador.sln no Visual Studio 2022.
+1. Abra `Otimizador.sln` no Visual Studio 2022.
 2. Selecione **Release** e **x64**.
 3. Compile com **Build > Build Solution**.
 
-Ou execute build.bat no Windows. O executável será gerado em bin\x64\Release\Otimizador.exe.
+Essa etapa e opcional e nao e necessaria para executar `Otimizador.bat`.
 
-O workflow do GitHub Actions também compila em windows-latest e publica o executável como artefato quando o build passa.
+## Uso e seguranca
 
-## Uso e segurança
-
-- A limpeza de temporários atua somente na pasta temporária padrão do usuário. Arquivos em uso ou protegidos são ignorados.
-- A remoção de Appx é limitada ao perfil atual; não altera pacotes provisionados para novas contas nem faz remoção em massa.
-- Leia os nomes e descrições antes de selecionar apps. Alguns aplicativos podem ser úteis para você.
-- A Lixeira é permanente depois de esvaziada. A tela pede confirmação antes da ação.
-- Instalações via winget são iniciadas em uma janela de terminal para que você possa acompanhar e aceitar os termos.
-- O Otimizador não desativa o Windows Update, Microsoft Defender, firewall, serviços essenciais, telemetria por registro ou mecanismos de segurança. Também não altera timers, planos ocultos de energia ou prioridades de processos.
-- Limpeza de cache libera espaço, mas não é uma promessa de aumento de FPS. Ganhos dependem do hardware, dos programas instalados e dos gargalos reais.
+- A limpeza de temporarios atua somente em `%LOCALAPPDATA%\Temp`. Arquivos em uso ou protegidos sao ignorados; links simbolicos e junctions nao sao percorridos.
+- A remocao de Appx e limitada ao perfil atual; nao altera pacotes provisionados para novas contas nem faz remocao em massa.
+- Leia os nomes e descricoes antes de selecionar apps. Alguns aplicativos podem ser uteis para voce.
+- A Lixeira e permanente depois de esvaziada. A tela pede confirmacao antes da acao.
+- Instalacoes via winget sao iniciadas em uma janela de terminal para que voce possa acompanhar e aceitar os termos.
+- O Otimizador nao desativa o Windows Update, Microsoft Defender, firewall, servicos essenciais ou mecanismos de seguranca.
+- Limpeza de cache libera espaco, mas nao e uma promessa de aumento de FPS. Ganhos dependem do hardware, dos programas instalados e dos gargalos reais.
 
 ## Releases externos
 
 - [SpotifyLite - release](https://github.com/TeamAntiLag/SpotifyLite/releases/tag/SpotifyLite)
-  - SHA-256 publicado pelo GitHub para o asset atualmente listado: a54dc32b0056012e29b8640541fb83a7bbc527975e0471dfa8a173accc1bc77f
 - [DiscordDebloat - release v2.1](https://github.com/TeamAntiLag/DiscordDebloat/releases/tag/v2.1)
-  - SHA-256 publicado pelo GitHub para o asset atualmente listado: 020c7956eef9f12c3e09fe3a71237e038136f47ae22548153457fc71bead6ee3
 
-Essas ferramentas são projetos de terceiros. Verifique a página, o publicador e o hash do arquivo antes de executar. O hash confirma que o arquivo corresponde ao asset publicado, mas não é uma auditoria de segurança do programa.
+Essas ferramentas sao projetos de terceiros. Verifique a pagina, o publicador e o arquivo antes de executar.
 
 ## Estrutura
 
-- Otimizador.sln / Otimizador.vcxproj
-- build.bat
-- src/main.cpp
-- src/core (SystemInfo, Cleanup, PackageManager e Debloat)
-- src/ui (MainWindow)
-- .github/workflows/windows-build.yml
+- `Otimizador.bat` - inicializador
+- `Otimizador.ps1` - interface e funcoes em PowerShell
+- `build.bat` - alias de compatibilidade para o inicializador
+- `Otimizador.sln` / `Otimizador.vcxproj` - versao C++ legada
+- `src/core` e `src/ui` - fontes C++ legadas
+- `.github/workflows/windows-build.yml` - verificacao PowerShell e build C++ no CI
 
-## Licença
+## Licenca
 
 Consulte o arquivo LICENSE.

@@ -7,34 +7,34 @@ $ErrorActionPreference = 'Stop'
 try {
     Add-Type -AssemblyName System.Windows.Forms
     Add-Type -AssemblyName System.Drawing
-    [Windows.Forms.Application]::EnableVisualStyles()
-    [Windows.Forms.Application]::SetCompatibleTextRenderingDefault($false)
+    [System.System.Windows.Forms.Application]::EnableVisualStyles()
+    [System.System.Windows.Forms.Application]::SetCompatibleTextRenderingDefault($false)
 }
 catch {
     $msg = 'Nao foi possivel carregar os componentes graficos do Windows.' + [Environment]::NewLine + $_.Exception.Message
-    [Windows.Forms.MessageBox]::Show($msg, 'Otimizador - erro', 'OK', 'Error') | Out-Null
+    [System.System.Windows.Forms.MessageBox]::Show($msg, 'Otimizador - erro', 'OK', 'Error') | Out-Null
     exit 1
 }
 
 $script:T = @{
-    Bg = [Drawing.Color]::FromArgb(9, 13, 21)
-    Sidebar = [Drawing.Color]::FromArgb(12, 18, 29)
-    Card = [Drawing.Color]::FromArgb(18, 27, 41)
-    CardAlt = [Drawing.Color]::FromArgb(21, 34, 53)
-    Border = [Drawing.Color]::FromArgb(39, 55, 76)
-    Text = [Drawing.Color]::FromArgb(240, 244, 252)
-    Muted = [Drawing.Color]::FromArgb(145, 160, 183)
-    Accent = [Drawing.Color]::FromArgb(112, 132, 255)
-    AccentDark = [Drawing.Color]::FromArgb(35, 47, 83)
-    Green = [Drawing.Color]::FromArgb(78, 205, 158)
-    Orange = [Drawing.Color]::FromArgb(245, 177, 93)
+    Bg = [System.Drawing.Color]::FromArgb(9, 13, 21)
+    Sidebar = [System.Drawing.Color]::FromArgb(12, 18, 29)
+    Card = [System.Drawing.Color]::FromArgb(18, 27, 41)
+    CardAlt = [System.Drawing.Color]::FromArgb(21, 34, 53)
+    Border = [System.Drawing.Color]::FromArgb(39, 55, 76)
+    Text = [System.Drawing.Color]::FromArgb(240, 244, 252)
+    Muted = [System.Drawing.Color]::FromArgb(145, 160, 183)
+    Accent = [System.Drawing.Color]::FromArgb(112, 132, 255)
+    AccentDark = [System.Drawing.Color]::FromArgb(35, 47, 83)
+    Green = [System.Drawing.Color]::FromArgb(78, 205, 158)
+    Orange = [System.Drawing.Color]::FromArgb(245, 177, 93)
 }
 $script:F = @{
-    Title = [Drawing.Font]::new('Segoe UI', 23, [Drawing.FontStyle]::Bold)
-    Heading = [Drawing.Font]::new('Segoe UI', 12, [Drawing.FontStyle]::Bold)
-    Body = [Drawing.Font]::new('Segoe UI', 9, [Drawing.FontStyle]::Regular)
-    Small = [Drawing.Font]::new('Segoe UI', 8, [Drawing.FontStyle]::Regular)
-    Button = [Drawing.Font]::new('Segoe UI', 9, [Drawing.FontStyle]::Semibold)
+    Title = [System.Drawing.Font]::new('Segoe UI', 23, [System.Drawing.FontStyle]::Bold)
+    Heading = [System.Drawing.Font]::new('Segoe UI', 12, [System.Drawing.FontStyle]::Bold)
+    Body = [System.Drawing.Font]::new('Segoe UI', 9, [System.Drawing.FontStyle]::Regular)
+    Small = [System.Drawing.Font]::new('Segoe UI', 8, [System.Drawing.FontStyle]::Regular)
+    Button = [System.Drawing.Font]::new('Segoe UI', 9, [System.Drawing.FontStyle]::Semibold)
 }
 $script:Form = $null
 $script:Content = $null
@@ -76,14 +76,14 @@ function Set-Status([string]$Message) {
     }
 }
 function Show-Info([string]$Message, [string]$Title='Otimizador') {
-    [Windows.Forms.MessageBox]::Show($script:Form, $Message, $Title, [Windows.Forms.MessageBoxButtons]::OK, [Windows.Forms.MessageBoxIcon]::Information) | Out-Null
+    [System.System.Windows.Forms.MessageBox]::Show($script:Form, $Message, $Title, [System.System.Windows.Forms.MessageBoxButtons]::OK, [System.System.Windows.Forms.MessageBoxIcon]::Information) | Out-Null
 }
 function Show-Warning([string]$Message, [string]$Title='Otimizador') {
-    [Windows.Forms.MessageBox]::Show($script:Form, $Message, $Title, [Windows.Forms.MessageBoxButtons]::OK, [Windows.Forms.MessageBoxIcon]::Warning) | Out-Null
+    [System.System.Windows.Forms.MessageBox]::Show($script:Form, $Message, $Title, [System.System.Windows.Forms.MessageBoxButtons]::OK, [System.System.Windows.Forms.MessageBoxIcon]::Warning) | Out-Null
 }
 function Confirm-Action([string]$Message, [string]$Title='Confirmar acao') {
-    $answer = [Windows.Forms.MessageBox]::Show($script:Form, $Message, $Title, [Windows.Forms.MessageBoxButtons]::YesNo, [Windows.Forms.MessageBoxIcon]::Warning, [Windows.Forms.MessageBoxDefaultButton]::Button2)
-    return ($answer -eq [Windows.Forms.DialogResult]::Yes)
+    $answer = [System.System.Windows.Forms.MessageBox]::Show($script:Form, $Message, $Title, [System.System.Windows.Forms.MessageBoxButtons]::YesNo, [System.System.Windows.Forms.MessageBoxIcon]::Warning, [System.System.Windows.Forms.MessageBoxDefaultButton]::Button2)
+    return ($answer -eq [System.System.Windows.Forms.DialogResult]::Yes)
 }
 function Format-Bytes([long]$Bytes) {
     $n = [double]$Bytes
@@ -98,7 +98,7 @@ function Get-SystemSnapshot {
     $memory='Nao detectada'; $memoryDetail=''; $free='Indisponivel'; $diskDetail=''
     try {
         $os=Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
-        if ($os.ProductName) { $name=$os.ProductName -replace '^Microsoft ',' ' }
+        if ($os.ProductName) { $name=$os.ProductName -replace '^Microsoft ',' }
         $v=if ($os.DisplayVersion) {$os.DisplayVersion} else {$os.ReleaseId}
         $version="$v | Build $($os.CurrentBuild)"
     } catch {}
@@ -114,7 +114,7 @@ function Get-SystemSnapshot {
         try {$osInfo=Get-CimInstance Win32_OperatingSystem -ErrorAction Stop; $memoryDetail=('{0:N1} GB disponiveis' -f ($osInfo.FreePhysicalMemory*1KB/1GB))} catch {}
     } catch {}
     try {
-        $drive=[IO.DriveInfo]::new($env:SystemDrive)
+        $drive=[System.IO.DriveInfo]::new($env:SystemDrive)
         if($drive.IsReady){$free=Format-Bytes ([long]$drive.AvailableFreeSpace);$diskDetail='livres de '+(Format-Bytes ([long]$drive.TotalSize))}
     } catch {}
     [pscustomobject]@{WindowsName=$name;WindowsVersion=$version;Processor=$cpu;Memory=$memory;MemoryDetail=$memoryDetail;DiskFree=$free;DiskDetail=$diskDetail}
@@ -122,23 +122,23 @@ function Get-SystemSnapshot {
 
 function Get-SafeTempRoot {
     if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) { throw 'LOCALAPPDATA nao esta definida.' }
-    $root=[IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'Temp')).TrimEnd('\')
-    if($root.Length -lt 12 -or $root -eq [IO.Path]::GetPathRoot($root).TrimEnd('\')){throw 'Caminho temporario invalido.'}
+    $root=[System.IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'Temp')).TrimEnd('\')
+    if($root.Length -lt 12 -or $root -eq [System.IO.Path]::GetPathRoot($root).TrimEnd('\')){throw 'Caminho temporario invalido.'}
     if(Test-Path -LiteralPath $root -PathType Container){
-        $attr=[IO.File]::GetAttributes($root)
-        if(($attr -band [IO.FileAttributes]::ReparsePoint) -ne 0){throw 'A pasta temporaria e um link ou junction. Limpeza bloqueada.'}
+        $attr=[System.IO.File]::GetAttributes($root)
+        if(($attr -band [System.IO.FileAttributes]::ReparsePoint) -ne 0){throw 'A pasta temporaria e um link ou junction. Limpeza bloqueada.'}
     }
     return $root
 }
 function Measure-DirectorySafe([string]$Path) {
     [long]$total=0
     try {
-        foreach($entry in [IO.Directory]::EnumerateFileSystemEntries($Path)){
+        foreach($entry in [System.IO.Directory]::EnumerateFileSystemEntries($Path)){
             try {
-                $attr=[IO.File]::GetAttributes($entry)
-                if(($attr -band [IO.FileAttributes]::ReparsePoint) -ne 0){continue}
-                if(($attr -band [IO.FileAttributes]::Directory) -ne 0){$total += Measure-DirectorySafe $entry}
-                else {$total += ([IO.FileInfo]::new($entry)).Length}
+                $attr=[System.IO.File]::GetAttributes($entry)
+                if(($attr -band [System.IO.FileAttributes]::ReparsePoint) -ne 0){continue}
+                if(($attr -band [System.IO.FileAttributes]::Directory) -ne 0){$total += Measure-DirectorySafe $entry}
+                else {$total += ([System.IO.FileInfo]::new($entry)).Length}
             } catch {}
         }
     } catch {}
@@ -146,13 +146,13 @@ function Measure-DirectorySafe([string]$Path) {
 }
 function Remove-TempEntrySafe([string]$Path,[hashtable]$Result) {
     try {
-        $attr=[IO.File]::GetAttributes($Path)
-        if(($attr -band [IO.FileAttributes]::ReparsePoint) -ne 0){$Result.Skipped++;return}
-        if(($attr -band [IO.FileAttributes]::Directory) -ne 0){
-            foreach($child in [IO.Directory]::EnumerateFileSystemEntries($Path)){Remove-TempEntrySafe $child $Result}
-            try {[IO.Directory]::Delete($Path,$false);$Result.Directories++} catch {$Result.Skipped++}
+        $attr=[System.IO.File]::GetAttributes($Path)
+        if(($attr -band [System.IO.FileAttributes]::ReparsePoint) -ne 0){$Result.Skipped++;return}
+        if(($attr -band [System.IO.FileAttributes]::Directory) -ne 0){
+            foreach($child in [System.IO.Directory]::EnumerateFileSystemEntries($Path)){Remove-TempEntrySafe $child $Result}
+            try {[System.IO.Directory]::Delete($Path,$false);$Result.Directories++} catch {$Result.Skipped++}
         } else {
-            $length=([IO.FileInfo]::new($Path)).Length
+            $length=([System.IO.FileInfo]::new($Path)).Length
             try {Remove-Item -LiteralPath $Path -Force -ErrorAction Stop;$Result.Bytes += $length;$Result.Files++} catch {$Result.Skipped++}
         }
     } catch {$Result.Skipped++}
@@ -161,7 +161,7 @@ function Invoke-TempCleanup {
     $root=Get-SafeTempRoot
     if(-not(Test-Path -LiteralPath $root -PathType Container)){return [pscustomobject]@{Bytes=0L;Files=0;Directories=0;Skipped=0}}
     $r=@{Bytes=[long]0;Files=0;Directories=0;Skipped=0}
-    foreach($entry in [IO.Directory]::EnumerateFileSystemEntries($root)){Remove-TempEntrySafe $entry $r}
+    foreach($entry in [System.IO.Directory]::EnumerateFileSystemEntries($root)){Remove-TempEntrySafe $entry $r}
     [pscustomobject]@{Bytes=[long]$r.Bytes;Files=[int]$r.Files;Directories=[int]$r.Directories;Skipped=[int]$r.Skipped}
 }
 function Get-WingetCommand {
@@ -170,37 +170,37 @@ function Get-WingetCommand {
     return $cmd
 }
 
-function New-Label([string]$Text,[int]$X,[int]$Y,[int]$W,[int]$H,[Drawing.Color]$Color=$script:T.Text,[Drawing.Font]$Font=$script:F.Body) {
-    $l=New-Object Windows.Forms.Label
-    $l.Text=$Text; $l.Location=[Drawing.Point]::new($X,$Y); $l.Size=[Drawing.Size]::new($W,$H)
-    $l.ForeColor=$Color; $l.BackColor=[Drawing.Color]::Transparent; $l.Font=$Font
-    $l.TextAlign=[Drawing.ContentAlignment]::MiddleLeft; $l.AutoEllipsis=$true
+function New-Label([string]$Text,[int]$X,[int]$Y,[int]$W,[int]$H,[System.Drawing.Color]$Color=$script:T.Text,[System.Drawing.Font]$Font=$script:F.Body) {
+    $l=New-Object System.Windows.Forms.Label
+    $l.Text=$Text; $l.Location=[System.Drawing.Point]::new($X,$Y); $l.Size=[System.Drawing.Size]::new($W,$H)
+    $l.ForeColor=$Color; $l.BackColor=[System.Drawing.Color]::Transparent; $l.Font=$Font
+    $l.TextAlign=[System.Drawing.ContentAlignment]::MiddleLeft; $l.AutoEllipsis=$true
     return $l
 }
 function New-Button([string]$Text,[int]$X,[int]$Y,[int]$W,[int]$H,[scriptblock]$Action,[bool]$Primary=$false,[bool]$Disabled=$false) {
-    $b=New-Object Windows.Forms.Button
-    $b.Text=$Text; $b.Location=[Drawing.Point]::new($X,$Y); $b.Size=[Drawing.Size]::new($W,$H)
-    $b.FlatStyle=[Windows.Forms.FlatStyle]::Flat; $b.FlatAppearance.BorderSize=1
+    $b=New-Object System.Windows.Forms.Button
+    $b.Text=$Text; $b.Location=[System.Drawing.Point]::new($X,$Y); $b.Size=[System.Drawing.Size]::new($W,$H)
+    $b.FlatStyle=[System.System.Windows.Forms.FlatStyle]::Flat; $b.FlatAppearance.BorderSize=1
     $b.FlatAppearance.BorderColor=$script:T.Border; $b.FlatAppearance.MouseOverBackColor=$script:T.CardAlt
     $b.BackColor=if($Primary){$script:T.Accent}else{$script:T.CardAlt}
-    $b.ForeColor=$script:T.Text; $b.Font=$script:F.Button; $b.Cursor=[Windows.Forms.Cursors]::Hand
+    $b.ForeColor=$script:T.Text; $b.Font=$script:F.Button; $b.Cursor=[System.System.Windows.Forms.Cursors]::Hand
     $b.Enabled=-not $Disabled
-    if($Disabled){$b.BackColor=[Drawing.Color]::FromArgb(43,51,65);$b.ForeColor=$script:T.Muted}
+    if($Disabled){$b.BackColor=[System.Drawing.Color]::FromArgb(43,51,65);$b.ForeColor=$script:T.Muted}
     if($Action){$b.Add_Click($Action)}
     return $b
 }
-function New-Card([Windows.Forms.Control]$Parent,[int]$X,[int]$Y,[int]$W,[int]$H,[Drawing.Color]$Color=$script:T.Card) {
-    $p=New-Object Windows.Forms.Panel
-    $p.Location=[Drawing.Point]::new($X,$Y);$p.Size=[Drawing.Size]::new($W,$H)
-    $p.BackColor=$Color;$p.BorderStyle=[Windows.Forms.BorderStyle]::FixedSingle
-    $p.Anchor=[Windows.Forms.AnchorStyles]::Top -bor [Windows.Forms.AnchorStyles]::Left -bor [Windows.Forms.AnchorStyles]::Right
+function New-Card([System.System.Windows.Forms.Control]$Parent,[int]$X,[int]$Y,[int]$W,[int]$H,[System.Drawing.Color]$Color=$script:T.Card) {
+    $p=New-Object System.Windows.Forms.Panel
+    $p.Location=[System.Drawing.Point]::new($X,$Y);$p.Size=[System.Drawing.Size]::new($W,$H)
+    $p.BackColor=$Color;$p.BorderStyle=[System.System.Windows.Forms.BorderStyle]::FixedSingle
+    $p.Anchor=[System.System.Windows.Forms.AnchorStyles]::Top -bor [System.System.Windows.Forms.AnchorStyles]::Left -bor [System.System.Windows.Forms.AnchorStyles]::Right
     $Parent.Controls.Add($p);return $p
 }
 function New-Page {
-    $p=New-Object Windows.Forms.Panel;$p.Dock=[Windows.Forms.DockStyle]::Fill
+    $p=New-Object System.Windows.Forms.Panel;$p.Dock=[System.System.Windows.Forms.DockStyle]::Fill
     $p.AutoScroll=$true;$p.BackColor=$script:T.Bg;$script:Content.Controls.Add($p);return $p
 }
-function Add-Header([Windows.Forms.Control]$Page,[string]$Title,[string]$Subtitle) {
+function Add-Header([System.System.Windows.Forms.Control]$Page,[string]$Title,[string]$Subtitle) {
     $Page.Controls.Add((New-Label 'OTIMIZADOR  /  WINDOWS 10 • 11' 28 15 430 22 $script:T.Muted $script:F.Small))
     $Page.Controls.Add((New-Label $Title 28 38 790 42 $script:T.Text $script:F.Title))
     $Page.Controls.Add((New-Label $Subtitle 30 82 850 25 $script:T.Muted $script:F.Body))
@@ -213,13 +213,15 @@ function Set-NavStyles {
     }
 }
 function Add-NavButton([string]$Name,[string]$Caption,[int]$Y) {
-    $b=New-Object Windows.Forms.Button
-    $b.Text=$Caption;$b.Location=[Drawing.Point]::new(14,$Y);$b.Size=[Drawing.Size]::new(192,42)
-    $b.FlatStyle=[Windows.Forms.FlatStyle]::Flat;$b.FlatAppearance.BorderSize=0
+    $b=New-Object System.Windows.Forms.Button
+    $b.Text=$Caption;$b.Location=[System.Drawing.Point]::new(14,$Y);$b.Size=[System.Drawing.Size]::new(192,42)
+    $b.FlatStyle=[System.System.Windows.Forms.FlatStyle]::Flat;$b.FlatAppearance.BorderSize=0
     $b.BackColor=$script:T.Sidebar;$b.ForeColor=$script:T.Muted;$b.Font=$script:F.Button
-    $b.TextAlign=[Drawing.ContentAlignment]::MiddleLeft;$b.Padding=[Windows.Forms.Padding]::new(12,0,0,0)
-    $b.Cursor=[Windows.Forms.Cursors]::Hand
-    $target=$Name;$b.Add_Click({Show-Page $target}.GetNewClosure())
+    $b.TextAlign=[System.Drawing.ContentAlignment]::MiddleLeft;$b.Padding=[System.System.Windows.Forms.Padding]::new(12,0,0,0)
+    $b.Cursor=[System.System.Windows.Forms.Cursors]::Hand
+    $target=$Name
+    $navAction={Show-Page $target}.GetNewClosure()
+    $b.Add_Click($navAction)
     $script:Nav[$Name]=$b;$script:Sidebar.Controls.Add($b)
 }
 function Show-Page([string]$Name) {
@@ -314,12 +316,13 @@ function New-DebloatPage {
     $bar=New-Card $page 28 120 $w 40
     $bar.Controls.Add((New-Label 'APLICATIVOS OPCIONAIS' 16 7 300 24 $script:T.Muted $script:F.Small))
     $script:DebloatCount=New-Label '0 selecionado(s)' ($w-190) 7 170 24 $script:T.Accent $script:F.Button
-    $script:DebloatCount.TextAlign=[Drawing.ContentAlignment]::MiddleRight;$bar.Controls.Add($script:DebloatCount)
+    $script:DebloatCount.TextAlign=[System.Drawing.ContentAlignment]::MiddleRight;$bar.Controls.Add($script:DebloatCount)
     for($i=0;$i -lt $script:OptionalApps.Count;$i++){
         $app=$script:OptionalApps[$i];$y=174+($i*47);$row=New-Card $page 28 $y $w 42
-        $check=New-Object Windows.Forms.CheckBox;$check.Location=[Drawing.Point]::new(14,8);$check.Size=[Drawing.Size]::new(22,24)
-        $check.Text='';$check.BackColor=[Drawing.Color]::Transparent;$check.FlatStyle=[Windows.Forms.FlatStyle]::Flat
-        $check.Add_CheckedChanged({Update-DebloatCounter}.GetNewClosure());$row.Controls.Add($check)
+        $check=New-Object System.Windows.Forms.CheckBox;$check.Location=[System.Drawing.Point]::new(14,8);$check.Size=[System.Drawing.Size]::new(22,24)
+        $check.Text='';$check.BackColor=[System.Drawing.Color]::Transparent;$check.FlatStyle=[System.System.Windows.Forms.FlatStyle]::Flat
+        $changedAction={Update-DebloatCounter}.GetNewClosure()
+        $check.Add_CheckedChanged($changedAction);$row.Controls.Add($check)
         $row.Controls.Add((New-Label $app.Name 48 1 ($w-330) 20 $script:T.Text $script:F.Button))
         $row.Controls.Add((New-Label $app.Description 48 20 ($w-330) 18 $script:T.Muted $script:F.Small))
         $script:DebloatItems += [pscustomobject]@{App=$app;Check=$check}
@@ -352,7 +355,7 @@ function New-DebloatPage {
 function New-AppsPage {
     $page=New-Page;Add-Header $page 'Biblioteca de aplicativos' 'Instale ferramentas conhecidas pelo Windows Package Manager (winget).'
     $w=[Math]::Max(680,$page.ClientSize.Width-56);$cmd=Get-WingetCommand;$ready=[bool]$cmd
-    $statusColor=if($ready){[Drawing.Color]::FromArgb(16,43,37)}else{[Drawing.Color]::FromArgb(49,36,24)}
+    $statusColor=if($ready){[System.Drawing.Color]::FromArgb(16,43,37)}else{[System.Drawing.Color]::FromArgb(49,36,24)}
     $statusText=if($ready){'WINGET DISPONIVEL • pronto para instalar'}else{'WINGET NAO ENCONTRADO • atualize o App Installer pela Microsoft Store'}
     $statusTextColor=if($ready){$script:T.Green}else{$script:T.Orange}
     $status=New-Card $page 28 120 $w 44 $statusColor
@@ -364,15 +367,20 @@ function New-AppsPage {
         $card.Controls.Add((New-Label $pkg.Name 14 7 ($cw-135) 22 $script:T.Text $script:F.Button))
         $card.Controls.Add((New-Label $pkg.Description 14 32 ($cw-135) 20 $script:T.Muted $script:F.Small))
         $selectedPackage=$pkg
-        $button=New-Button 'Instalar' ($cw-106) 15 88 34 {
-            try{
+        $installAction = {
+            try {
                 $winget=Get-WingetCommand
-                if(-not $winget){Start-Process 'ms-windows-store://pdp/?ProductId=9NBLGGH4NNS1';Show-Warning 'Atualize o App Installer pela Microsoft Store para obter winget.';return}
+                if(-not $winget){
+                    Start-Process 'ms-windows-store://pdp/?ProductId=9NBLGGH4NNS1'
+                    Show-Warning 'Atualize o App Installer pela Microsoft Store para obter winget.'
+                    return
+                }
                 $args='install --id "{0}" -e --source winget' -f $selectedPackage.Id
                 Start-Process -FilePath $winget.Source -ArgumentList $args -WindowStyle Normal
                 Set-Status "Instalador iniciado: $($selectedPackage.Name). Acompanhe o terminal."
-            }catch{Show-Warning "Nao foi possivel iniciar: $($_.Exception.Message)"}
-        }.GetNewClosure() $ready
+            } catch { Show-Warning "Nao foi possivel iniciar: $($_.Exception.Message)" }
+        }.GetNewClosure()
+        $button=New-Button 'Instalar' ($cw-106) 15 88 34 $installAction $ready
         $card.Controls.Add($button)
     }
 }
@@ -411,29 +419,29 @@ function New-ToolsPage {
 }
 
 # Montagem da janela principal
-$script:Form=New-Object Windows.Forms.Form
+$script:Form=New-Object System.Windows.Forms.Form
 $script:Form.Text='Otimizador - Windows 10 / 11'
-$script:Form.StartPosition=[Windows.Forms.FormStartPosition]::CenterScreen
-$script:Form.Size=[Drawing.Size]::new(1240,820)
-$script:Form.MinimumSize=[Drawing.Size]::new(1080,720)
+$script:Form.StartPosition=[System.System.Windows.Forms.FormStartPosition]::CenterScreen
+$script:Form.Size=[System.Drawing.Size]::new(1240,820)
+$script:Form.MinimumSize=[System.Drawing.Size]::new(1080,720)
 $script:Form.BackColor=$script:T.Bg;$script:Form.ForeColor=$script:T.Text;$script:Form.Font=$script:F.Body
 
-$footer=New-Object Windows.Forms.Panel
-$footer.Dock=[Windows.Forms.DockStyle]::Bottom;$footer.Height=30;$footer.BackColor=$script:T.Sidebar
+$footer=New-Object System.Windows.Forms.Panel
+$footer.Dock=[System.System.Windows.Forms.DockStyle]::Bottom;$footer.Height=30;$footer.BackColor=$script:T.Sidebar
 $script:Status=New-Label '  Pronto. Escolha uma acao para comecar.' 8 2 950 24 $script:T.Muted $script:F.Small
 $footer.Controls.Add($script:Status)
 
-$script:Content=New-Object Windows.Forms.Panel
-$script:Content.Dock=[Windows.Forms.DockStyle]::Fill;$script:Content.BackColor=$script:T.Bg
+$script:Content=New-Object System.Windows.Forms.Panel
+$script:Content.Dock=[System.System.Windows.Forms.DockStyle]::Fill;$script:Content.BackColor=$script:T.Bg
 
-$script:Sidebar=New-Object Windows.Forms.Panel
-$script:Sidebar.Dock=[Windows.Forms.DockStyle]::Left;$script:Sidebar.Width=220;$script:Sidebar.BackColor=$script:T.Sidebar
-$brand=New-Label 'O' 22 22 42 42 ([Drawing.Color]::White) $script:F.Title
-$brand.BackColor=$script:T.Accent;$brand.TextAlign=[Drawing.ContentAlignment]::MiddleCenter
+$script:Sidebar=New-Object System.Windows.Forms.Panel
+$script:Sidebar.Dock=[System.System.Windows.Forms.DockStyle]::Left;$script:Sidebar.Width=220;$script:Sidebar.BackColor=$script:T.Sidebar
+$brand=New-Label 'O' 22 22 42 42 ([System.Drawing.Color]::White) $script:F.Title
+$brand.BackColor=$script:T.Accent;$brand.TextAlign=[System.Drawing.ContentAlignment]::MiddleCenter
 $script:Sidebar.Controls.Add($brand)
 $script:Sidebar.Controls.Add((New-Label 'OTIMIZADOR' 76 22 125 24 $script:T.Text $script:F.Button))
 $script:Sidebar.Controls.Add((New-Label 'PC CARE  •  DESKTOP' 77 46 125 20 $script:T.Muted $script:F.Small))
-$line=New-Object Windows.Forms.Panel;$line.Location=[Drawing.Point]::new(20,82);$line.Size=[Drawing.Size]::new(178,1);$line.BackColor=$script:T.Border
+$line=New-Object System.Windows.Forms.Panel;$line.Location=[System.Drawing.Point]::new(20,82);$line.Size=[System.Drawing.Size]::new(178,1);$line.BackColor=$script:T.Border
 $script:Sidebar.Controls.Add($line)
 $script:Sidebar.Controls.Add((New-Label 'ESPACO DE TRABALHO' 24 98 170 22 $script:T.Muted $script:F.Small))
 Add-NavButton 'Home' '  Visao geral' 132
@@ -441,7 +449,7 @@ Add-NavButton 'Cleaner' '  Limpeza' 180
 Add-NavButton 'Debloat' '  Debloat seletivo' 228
 Add-NavButton 'Apps' '  Aplicativos' 276
 Add-NavButton 'Tools' '  Ferramentas' 324
-$line2=New-Object Windows.Forms.Panel;$line2.Location=[Drawing.Point]::new(20,392);$line2.Size=[Drawing.Size]::new(178,1);$line2.BackColor=$script:T.Border
+$line2=New-Object System.Windows.Forms.Panel;$line2.Location=[System.Drawing.Point]::new(20,392);$line2.Size=[System.Drawing.Size]::new(178,1);$line2.BackColor=$script:T.Border
 $script:Sidebar.Controls.Add($line2)
 $script:Sidebar.Controls.Add((New-Label 'SEGURO POR PADRAO' 24 414 170 22 $script:T.Green $script:F.Small))
 $script:Sidebar.Controls.Add((New-Label 'Acoes seletivas. Defender, firewall e servicos essenciais permanecem intactos.' 24 440 170 72 $script:T.Muted $script:F.Small))

@@ -333,7 +333,7 @@ function New-DebloatPage {
         $names=($selected | ForEach-Object {'- '+$_.App.Name}) -join [Environment]::NewLine
         $question=@('Remover estes aplicativos apenas do usuario atual?','',$names,'','A reinstalacao pode exigir a Microsoft Store.') -join [Environment]::NewLine
         if(-not(Confirm-Action $question 'Confirmar debloat')){return}
-        $ok=0;$missing=0;$failed=New-Object System.Collections.Generic.List[string]
+        $ok=0;$missing=0;$failed=New-Object 'System.Collections.Generic.List[string]'
         foreach($entry in $selected){
             try{
                 $matches=@(Get-AppxPackage -Name $entry.App.Id -ErrorAction SilentlyContinue | Where-Object {$_.Name -eq $entry.App.Id})

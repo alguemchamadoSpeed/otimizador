@@ -12,7 +12,7 @@ try {
 }
 catch {
     $msg = 'Nao foi possivel carregar os componentes graficos do Windows.' + [Environment]::NewLine + $_.Exception.Message
-    [System.Windows.Forms.MessageBox]::Show($msg, 'Otimizador - erro', 'OK', 'Error') | Out-Null
+    [System.Windows.Forms.MessageBox]::Show($msg, 'Otimizador - erro', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
     exit 1
 }
 
@@ -239,7 +239,7 @@ function Show-Page([string]$Name) {
 
 function New-DashboardPage {
     $page=New-Page;Add-Header $page 'Seu Windows, mais leve.' 'Um painel simples para organizar o PC depois de uma formatacao.'
-    $w=[Math]::Max(680,$page.ClientSize.Width-56)
+    $w=[Math]::Max(680,$script:Form.ClientSize.Width-220-56)
     $hero=New-Card $page 28 120 $w 158 $script:T.CardAlt
     $hero.Controls.Add((New-Label 'PRONTO PARA COMECAR?' 24 16 340 22 $script:T.Muted $script:F.Small))
     $hero.Controls.Add((New-Label 'Cuide do seu PC em poucos passos.' 24 42 ($w-60) 40 $script:T.Text $script:F.Heading))
@@ -273,7 +273,7 @@ function New-DashboardPage {
 
 function New-CleanerPage {
     $page=New-Page;Add-Header $page 'Limpeza inteligente' 'Confira o que sera removido antes de executar cada acao.'
-    $w=[Math]::Max(680,$page.ClientSize.Width-56);$gap=16;$half=[int][Math]::Floor(($w-$gap)/2);$rx=28+$half+$gap
+    $w=[Math]::Max(680,$script:Form.ClientSize.Width-220-56);$gap=16;$half=[int][Math]::Floor(($w-$gap)/2);$rx=28+$half+$gap
     $temp=New-Card $page 28 122 $half 300
     $temp.Controls.Add((New-Label 'ARQUIVOS TEMPORARIOS' 20 20 ($half-40) 22 $script:T.Muted $script:F.Small))
     $script:TempSizeLabel=New-Label (Format-Bytes (Measure-DirectorySafe (Get-SafeTempRoot))) 20 62 ($half-40) 48 $script:T.Text $script:F.Title
@@ -312,7 +312,7 @@ function Update-DebloatCounter {
 }
 function New-DebloatPage {
     $page=New-Page;Add-Header $page 'Debloat seletivo' 'Voce escolhe. Nenhum aplicativo e removido sem marcar e confirmar.'
-    $w=[Math]::Max(680,$page.ClientSize.Width-56);$script:DebloatItems=@()
+    $w=[Math]::Max(680,$script:Form.ClientSize.Width-220-56);$script:DebloatItems=@()
     $bar=New-Card $page 28 120 $w 40
     $bar.Controls.Add((New-Label 'APLICATIVOS OPCIONAIS' 16 7 300 24 $script:T.Muted $script:F.Small))
     $script:DebloatCount=New-Label '0 selecionado(s)' ($w-190) 7 170 24 $script:T.Accent $script:F.Button
@@ -354,7 +354,7 @@ function New-DebloatPage {
 
 function New-AppsPage {
     $page=New-Page;Add-Header $page 'Biblioteca de aplicativos' 'Instale ferramentas conhecidas pelo Windows Package Manager (winget).'
-    $w=[Math]::Max(680,$page.ClientSize.Width-56);$cmd=Get-WingetCommand;$ready=[bool]$cmd
+    $w=[Math]::Max(680,$script:Form.ClientSize.Width-220-56);$cmd=Get-WingetCommand;$ready=[bool]$cmd
     $statusColor=if($ready){[System.Drawing.Color]::FromArgb(16,43,37)}else{[System.Drawing.Color]::FromArgb(49,36,24)}
     $statusText=if($ready){'WINGET DISPONIVEL • pronto para instalar'}else{'WINGET NAO ENCONTRADO • atualize o App Installer pela Microsoft Store'}
     $statusTextColor=if($ready){$script:T.Green}else{$script:T.Orange}
@@ -387,7 +387,7 @@ function New-AppsPage {
 
 function New-ToolsPage {
     $page=New-Page;Add-Header $page 'Ferramentas extras' 'Atalhos para configuracoes do Windows e projetos da comunidade.'
-    $w=[Math]::Max(680,$page.ClientSize.Width-56);$half=[int][Math]::Floor(($w-14)/2);$rx=42+$half
+    $w=[Math]::Max(680,$script:Form.ClientSize.Width-220-56);$half=[int][Math]::Floor(($w-14)/2);$rx=42+$half
     $a=New-Card $page 28 130 $half 140
     $a.Controls.Add((New-Label '01  /  INICIALIZACAO' 18 14 ($half-36) 22 $script:T.Muted $script:F.Small))
     $a.Controls.Add((New-Label 'Controle o que inicia' 18 43 ($half-36) 28 $script:T.Text $script:F.Heading))
